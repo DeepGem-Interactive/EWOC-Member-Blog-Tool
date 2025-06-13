@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}Register - NLBM Blog Tool{% endblock %}
+
+{% block extra_css %}
+<style>
+    .register-card {
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .register-header {
+        background-color: #ffffff;
+        color: white;
+        border-radius: 10px 10px 0 0 !important;
+    }
+    .form-group {
+        margin-bottom: 1.25rem;
+    }
+    .password-help-text {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+    .planning-session-options {
+        margin-top: 0.5rem;
+    }
+    .planning-session-option {
+        margin-bottom: 0.5rem;
+    }
+    .other-planning-session {
+        margin-top: 0.5rem;
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card register-card">
+                <div class="card-header register-header">
+                    <h3 class="text-center mb-0 text-black">Create Account</h3>
+                </div>
+                <div class="card-body">
+                    {% if error %}
+                    <div class="alert alert-danger">{{ error }}</div>
+                    {% endif %}
+                    
+                    <form method="POST" id="registration-form">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="email" class="form-label">Email Address</label>
+                                    <input type="email" class="form-control" id="email" name="email" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="password" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="password" name="password" required>
+                                    <small class="password-help-text">At least 8 characters</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="lawyer_name" class="form-label">Your Full Name</label>
+                                    <input type="text" class="form-control" id="lawyer_name" name="lawyer_name" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="firm" class="form-label">Law Firm Name</label>
+                                    <input type="text" class="form-control" id="firm" name="firm" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="location" class="form-label">City</label>
+                                    <input type="text" class="form-control" id="location" name="location" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="state" class="form-label">State</label>
+                                    <input type="text" class="form-control" id="state" name="state" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="address" class="form-label">Address (Optional)</label>
+                            <input type="text" class="form-control" id="address" name="address" 
+                                   data-bs-toggle="tooltip" 
+                                   data-bs-placement="right" 
+                                   data-bs-html="true"
+                                   title="<strong>Examples:</strong><br>Southern California<br>Tri-state area">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Planning Session</label>
+                            <div class="planning-session-options">
+                                <div class="planning-session-option">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="planning_session" 
+                                               id="planning_session_legacy" value="Life & Legacy Planning Session" required>
+                                        <label class="form-check-label" for="planning_session_legacy">
+                                            Life & Legacy
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="planning-session-option">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="planning_session" 
+                                               id="planning_session_wealth" value="Family Wealth Planning Session">
+                                        <label class="form-check-label" for="planning_session_wealth">
+                                            Family Wealth
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="planning-session-option">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="planning_session" 
+                                               id="planning_session_other" value="other">
+                                        <label class="form-check-label" for="planning_session_other">
+                                            Other
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="other-planning-session" id="other_planning_session">
+                                    <input type="text" class="form-control mt-2" id="other_planning_session_input" 
+                                           name="other_planning_session" placeholder="Please specify">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="discovery_call_link" class="form-label">15-Minute Discovery Call Booking Link</label>
+                            <input type="url" class="form-control" id="discovery_call_link" name="discovery_call_link" 
+                                   placeholder="https://..." required>
+                            <small class="text-muted">Enter the URL where clients can book their 15-minute discovery call</small>
+                        </div>
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i data-feather="user-plus" class="icon-sm me-1"></i> Register
+                            </button>
+                            <a href="{{ url_for('login') }}" class="btn btn-outline-secondary">
+                                <i data-feather="log-in" class="icon-sm me-1"></i> Already have an account? Login
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        feather.replace();
+        
+        // Initialize tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        
+        const form = document.getElementById('registration-form');
+        const otherPlanningSession = document.getElementById('other_planning_session');
+        const otherPlanningSessionInput = document.getElementById('other_planning_session_input');
+        const planningSessionOther = document.getElementById('planning_session_other');
+
+        // Show/hide other planning session input
+        document.querySelectorAll('input[name="planning_session"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.value === 'other') {
+                    otherPlanningSession.style.display = 'block';
+                    otherPlanningSessionInput.required = true;
+                } else {
+                    otherPlanningSession.style.display = 'none';
+                    otherPlanningSessionInput.required = false;
+                }
+            });
+        });
+
+        // Form submission handling
+        form.addEventListener('submit', function(e) {
+            if (planningSessionOther.checked && !otherPlanningSessionInput.value.trim()) {
+                e.preventDefault();
+                alert('Please specify the other planning session type');
+            }
+        });
+    });
+</script>
+{% endblock %}
