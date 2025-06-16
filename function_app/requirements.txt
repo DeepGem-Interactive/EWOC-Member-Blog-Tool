@@ -1,0 +1,14 @@
+python-docx 
+azure-storage-blob 
+azure-ai-textanalytics 
+azure-identity 
+azure-cognitiveservices-vision-computervision 
+openai
+python-dotenv
+requests
+markdown
+beautifulsoup4
+azure-functions
+azure-keyvault-secrets
+python-dateutil
+SQLAlchemy

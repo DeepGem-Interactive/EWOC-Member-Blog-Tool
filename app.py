@@ -336,7 +336,7 @@ class AzureServices:
             hook_end = Config.SECTION_MARKERS['hook']['end']
             if hook_start < len(paragraphs):
                 preserved_sections['hook'] = '\n\n'.join(paragraphs[hook_start:hook_end])
-                print(f"Preserved Hook: {preserved_sections['hook'][:100]}...")
+                print(f"Extracted Hook: {preserved_sections['hook'][:10]}...")
             else:
                 print("Warning: Hook section not found in content")
                 preserved_sections['hook'] = ""
@@ -346,7 +346,7 @@ class AzureServices:
             plug_end = Config.SECTION_MARKERS['plug']['end']
             if plug_start < len(paragraphs):
                 preserved_sections['plug'] = '\n\n'.join(paragraphs[plug_start:plug_end])
-                print(f"Preserved Plug: {preserved_sections['plug'][:100]}...")
+                print(f"Extracted Plug: {preserved_sections['plug'][:10]}...")
             else:
                 print("Warning: Plug section not found in content")
                 preserved_sections['plug'] = ""
@@ -356,7 +356,7 @@ class AzureServices:
             disclaimer_end = Config.SECTION_MARKERS['disclaimer']['end']
             if disclaimer_start == -1 and len(paragraphs) > 0:
                 preserved_sections['disclaimer'] = paragraphs[-1]
-                print(f"Preserved Disclaimer: {preserved_sections['disclaimer'][:100]}...")
+                print(f"Extracted Disclaimer: {preserved_sections['disclaimer'][:10]}...")
             else:
                 print("Warning: Disclaimer section not found in content")
                 preserved_sections['disclaimer'] = ""
@@ -367,40 +367,174 @@ class AzureServices:
             return {'hook': "", 'plug': "", 'disclaimer': ""}
 
     def _reconstruct_content(self, new_content, preserved_sections):
-        """Reconstruct content with preserved sections."""
+        """Preserve specific sections exactly as they are in the original content."""
         try:
             paragraphs = new_content.split('\n\n')
             
-            # Insert preserved sections at their original positions
+            # Replace the sections with their original content exactly as is
             if Config.SECTION_MARKERS['hook']['start'] == 0 and preserved_sections['hook']:
                 paragraphs[0] = preserved_sections['hook']
-                print("Reconstructed Hook section")
+                print("Preserved Hook section exactly as is")
             
             plug_start = Config.SECTION_MARKERS['plug']['start']
             if plug_start < len(paragraphs) and preserved_sections['plug']:
                 paragraphs[plug_start] = preserved_sections['plug']
-                print("Reconstructed Plug section")
+                print("Preserved Plug section exactly as is")
             
             if Config.SECTION_MARKERS['disclaimer']['start'] == -1 and preserved_sections['disclaimer']:
                 paragraphs[-1] = preserved_sections['disclaimer']
-                print("Reconstructed Disclaimer section")
+                print("Preserved Disclaimer section exactly as is")
             
             final_content = '\n\n'.join(paragraphs)
             
-            # Verify sections are preserved
+            # Verify sections are preserved exactly
             if preserved_sections['hook'] and preserved_sections['hook'] not in final_content:
-                print("Warning: Hook section not found in final content")
+                print("Warning: Hook section not preserved exactly")
             if preserved_sections['plug'] and preserved_sections['plug'] not in final_content:
-                print("Warning: Plug section not found in final content")
+                print("Warning: Plug section not preserved exactly")
             if preserved_sections['disclaimer'] and preserved_sections['disclaimer'] not in final_content:
-                print("Warning: Disclaimer section not found in final content")
+                print("Warning: Disclaimer section not preserved exactly")
             
             return final_content
         except Exception as e:
-            print(f"Error reconstructing content: {str(e)}")
+            print(f"Error preserving sections: {str(e)}")
             return new_content
 
-    def rewrite_content(self, original_text, tone, tone_description, keywords, firm_name, location, lawyer_name, city, state, planning_session_name="Life & Legacy Planning Session"):
+    def _validate_with_gpt(self, original_text, new_content, components):
+        """Validate article components using GPT for better semantic understanding."""
+        validation_prompt = f"""
+            You are an expert content validator. Analyze these two articles and provide a detailed validation.
+            You MUST respond with a valid JSON object following this EXACT structure, with no additional text:
+            {{
+                "components": {{
+                    "keywords": {{
+                        "found": true/false,
+                        "occurrences": number,
+                        "variations": ["variation1", "variation2"],
+                        "in_first_150": true/false
+                    }},
+                    "firm_info": {{
+                        "found": true/false,
+                        "name": true/false,
+                        "location": true/false
+                    }},
+                    "lawyer_info": {{
+                        "found": true/false,
+                        "name": true/false,
+                        "location": true/false
+                    }},
+                    "planning_session": {{
+                        "found": true/false,
+                        "name": true/false,
+                        "references": number
+                    }},
+                    "discovery_call": {{
+                        "found": true/false,
+                        "link": true/false,
+                        "references": number
+                    }}
+                }},
+                "preserved_sections": {{
+                    "hook": true/false,
+                    "plug": true/false,
+                    "disclaimer": true/false
+                }},
+                "change_analysis": {{
+                    "percentage": number,
+                    "significant_changes": true/false,
+                    "maintained_essence": true/false
+                }},
+                "warnings": ["warning1", "warning2"],
+                "missing_components": ["component1", "component2"]
+            }}
+
+            Analyze the following content:
+
+            Required components to check:
+            - Keywords: {components['keywords']}
+            - Firm: {components['firm_name']} in {components['location']}
+            - Lawyer: {components['lawyer_name']} in {components['city']}, {components['state']}
+            - Planning Session: {components['planning_session_name']}
+            - Discovery Call: {components['discovery_call_link']}
+
+            Original Article:
+            {original_text}
+
+            New Article:
+            {new_content}
+
+            Remember to respond with ONLY the JSON object, no additional text or explanation.
+        """
+
+        try:
+            response = self.text_client.chat.completions.create(
+                model=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
+                messages=[
+                    {"role": "system", "content": "You are a JSON-only response validator. Always respond with valid JSON matching the exact structure provided."},
+                    {"role": "user", "content": validation_prompt}
+                ],
+                temperature=0.1,  # Lower temperature for more consistent JSON output
+                response_format={ "type": "json_object" }  # Force JSON response
+            )
+
+            # Get the response content and ensure it's valid JSON
+            response_content = response.choices[0].message.content.strip()
+            
+            # Try to parse the JSON response
+            try:
+                validation_results = json.loads(response_content)
+            except json.JSONDecodeError as e:
+                print(f"Error parsing JSON response: {str(e)}")
+                print(f"Raw response: {response_content}")
+                raise
+
+            # Validate the structure of the response
+            required_keys = ['components', 'preserved_sections', 'change_analysis', 'warnings', 'missing_components']
+            if not all(key in validation_results for key in required_keys):
+                print("Invalid response structure. Missing required keys.")
+                raise ValueError("Invalid response structure")
+
+            # Print validation results in a readable format
+            print("\n=== GPT Article Validation Results ===")
+            
+            print("\nComponent Status:")
+            for component, details in validation_results['components'].items():
+                status = '✓' if details.get('found', False) else '✗'
+                print(f"- {component}: {status}")
+                if component == 'keywords' and details.get('variations'):
+                    print(f"  • Variations found: {', '.join(details['variations'])}")
+                if 'occurrences' in details:
+                    print(f"  • Occurrences: {details['occurrences']}")
+
+            print("\nPreserved Sections:")
+            for section, preserved in validation_results['preserved_sections'].items():
+                print(f"- {section}: {'✓' if preserved else '✗'}")
+
+            print(f"\nChange Analysis:")
+            print(f"- Change Percentage: {validation_results['change_analysis']['percentage']:.1f}%")
+            print(f"- Significant Changes: {'✓' if validation_results['change_analysis']['significant_changes'] else '✗'}")
+            print(f"- Maintained Essence: {'✓' if validation_results['change_analysis']['maintained_essence'] else '✗'}")
+
+            if validation_results['warnings']:
+                print("\nWarnings:")
+                for warning in validation_results['warnings']:
+                    print(f"- {warning}")
+
+            if validation_results['missing_components']:
+                print("\nMissing Components:")
+                for component in validation_results['missing_components']:
+                    print(f"- {component}")
+
+            print("===============================\n")
+
+            return validation_results
+
+        except Exception as e:
+            print(f"Error in GPT validation: {str(e)}")
+            print("Unable to validate article components. Please check the generated content manually.")
+            return None
+
+    def rewrite_content(self, original_text, tone, tone_description, keywords, firm_name, location, lawyer_name, city, state, discovery_call_link, planning_session_name="Life & Legacy Planning Session"):
         try:
             # Extract sections to preserve
             print("\nExtracting sections to preserve...")
@@ -410,7 +544,7 @@ class AzureServices:
             system_prompt = f"""
                 You are a legal blog post rewriter. There should be At least 30% changes from original. Rewrite the article following these strict guidelines:
                 
-                CRITICAL: DO NOT MODIFY THESE SECTIONS:
+                CRITICAL: DO NOT MODIFY THESE SECTIONS {preserved_sections}:
                 1. The first paragraph (Hook) - Keep it exactly as is
                 2. The fourth paragraph (Plug) - Keep it exactly as is
                 3. The last paragraph (Disclaimer) - Keep it exactly as is
@@ -418,12 +552,13 @@ class AzureServices:
                 These sections must remain unchanged in both content and position.
                 
                 SEO REQUIREMENTS:
-                1. Must include these elements within the first 150 words:
+                1. Must include these elements:
                    - Primary keywords: {keywords}
                    - Firm name: {firm_name}
                    - City-state of firm: {location}
                    - Lawyer name: {lawyer_name}
                    - City-state of Lawyer: {city}, {state}
+                   - Planning session name: {planning_session_name}
                 2. Incorporate naturally - don't just list them
                 
                 TONE REQUIREMENTS:
@@ -456,6 +591,20 @@ class AzureServices:
                 10. Mention {firm_name} in {location} where relevant
                 11. Firm name is {firm_name} and location is {location}
                 12 Lawyer name is {lawyer_name} and location is {city}, {state}
+                13. The meeting scheduling link is {discovery_call_link}
+                14. The planning session name is {planning_session_name}
+                15. Make sure to include the following dynamic components where ever required:
+                     - hook: {preserved_sections['hook']}
+                     - plug: {preserved_sections['plug']}
+                     - disclaimer: {preserved_sections['disclaimer']}
+                     - keywords: {keywords}
+                     - firm_name: {firm_name}
+                     - location: {location}
+                     - lawyer_name: {lawyer_name}
+                     - city: {city}
+                     - state: {state}
+                     - planning_session_name: {planning_session_name}
+                     - discovery_call_link: {discovery_call_link}
                 
                 DON'Ts:
                 1. Avoid legal jargon or complex language (keep it high-school level)
@@ -497,9 +646,26 @@ class AzureServices:
             # Get the rewritten content
             rewritten_content = response.choices[0].message.content
             
-            # Reconstruct the content with preserved sections
-            print("\nReconstructing content with preserved sections...")
+            # Preserve the sections exactly as they are
+            print("\nPreserving sections exactly as they are...")
             final_content = self._reconstruct_content(rewritten_content, preserved_sections)
+            
+            # Validate the generated content using GPT
+            components = {
+                'keywords': keywords,
+                'firm_name': firm_name,
+                'location': location,
+                'lawyer_name': lawyer_name,
+                'city': city,
+                'state': state,
+                'planning_session_name': planning_session_name,
+                'discovery_call_link': discovery_call_link
+            }
+            
+            validation_results = self._validate_with_gpt(original_text, final_content, components)
+            
+            if validation_results is None:
+                print("Warning: Article validation failed. Please review the content manually.")
             
             print("\nArticle generation complete!")
             return final_content
@@ -901,6 +1067,7 @@ def select_article(article):
         city = user.get('location', '')
         state = user.get('state', '')
         planning_session_name = request.form.get('planning_session_name','') 
+        discovery_call_link = request.form.get('discovery_call_link','')
         if not planning_session_name:
             planning_session_name="Life & Legacy Planning Session"
 
@@ -915,7 +1082,8 @@ def select_article(article):
             lawyer_name,
             city,
             state,
-            planning_session_name
+            planning_session_name,
+            discovery_call_link
         )
         
         # Save the generated content to a file
@@ -1166,8 +1334,15 @@ def teardown_db(exception):
 @app.route('/preview_article/<article>')
 def preview_article(article):
     try:
-        content = FileManager.read_docx(article)
-        # Convert the content to HTML for preview
+        # Convert the article name from .docx to .md
+        markdown_filename = article.replace('.docx', '.md')
+        markdown_path = os.path.join('articles', 'markdown', markdown_filename)
+        
+        # Read the markdown content
+        with open(markdown_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        # Convert the markdown content to HTML for preview
         html_content = markdown.markdown(content)
         return jsonify({'content': html_content})
     except Exception as e:

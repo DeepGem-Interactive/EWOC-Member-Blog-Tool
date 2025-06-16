@@ -1,0 +1,14 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "CONTENT_EDITOR_FUNCTION_KEY": "default_key_for_local_dev",
+    "CONTENT_GENERATOR_FUNCTION_KEY": "default_key_for_local_dev",
+    "IMAGE_FUNCTION_KEY": "default_key_for_local_dev"
+  },
+  "Host": {
+    "LocalHttpPort": 7071,
+    "CORS": "*"
+  }
+}
