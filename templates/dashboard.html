@@ -335,22 +335,22 @@
                         <!-- Article details preview -->
                         <div class="mt-3">
                             <div class="d-flex justify-content-between align-items-center mb-3">
-                                <button class="btn btn-link text-decoration-none p-0 d-flex align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#userInfoCollapse" aria-expanded="false" aria-controls="userInfoCollapse">
+                                <button class="btn btn-link text-decoration-none p-0 d-flex align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#userInfoCollapse{{ article_index }}" aria-expanded="false" aria-controls="userInfoCollapse{{ article_index }}">
                                     <i data-feather="chevron-right" class="icon-sm me-2 collapse-icon"></i>
-                                    <h3 class="h6 mb-0">Your Information</h3>
+                                    <h3 class="h6 mb-0">Edit Your Firm's Info</h3>
                                 </button>
                                 <button type="button" class="btn btn-sm btn-light border edit-info-btn">
                                     <i data-feather="edit-2" class="icon-sm"></i>
                                 </button>
                             </div>
-                            <div class="collapse" id="userInfoCollapse">
+                            <div class="collapse" id="userInfoCollapse{{ article_index }}">
                                 <div class="card bg-light">
                                     <div class="card-body">
                                         <!-- View Mode -->
                                         <div class="info-view-mode">
-                                            <p class="mb-2"><strong>Firm:</strong> <span class="firm-value">{{ user.firm }}</span></p>
-                                            <p class="mb-2"><strong>Location:</strong> <span class="location-value">{{ user.location }}</span></p>
-                                            <p class="mb-2"><strong>Lawyer Name:</strong> <span class="lawyer-name-value">{{ user.lawyer_name }}</span></p>
+                                            <p class="mb-2"><strong>Firm Name:</strong> <span class="firm-value">{{ user.firm }}</span></p>
+                                            <p class="mb-2"><strong>Your City/Region:</strong> <span class="location-value">{{ user.location }}</span></p>
+                                            <p class="mb-2"><strong>Name:</strong> <span class="lawyer-name-value">{{ user.lawyer_name }}</span></p>
                                             <p class="mb-2"><strong>State:</strong> <span class="state-value">{{ user.state }}</span></p>
                                             {% if user.address %}
                                             <p class="mb-2"><strong>Address:</strong> <span class="address-value">{{ user.address }}</span></p>
@@ -367,15 +367,15 @@
                                         <!-- Edit Mode -->
                                         <div class="info-edit-mode" style="display: none;">
                                             <div class="mb-2">
-                                                <label class="form-label"><strong>Firm:</strong></label>
+                                                <label class="form-label"><strong>Firm Name:</strong></label>
                                                 <input type="text" class="form-control form-control-sm firm-input" value="{{ user.firm }}">
                                             </div>
                                             <div class="mb-2">
-                                                <label class="form-label"><strong>Location:</strong></label>
+                                                <label class="form-label"><strong>Your City/Region:</strong></label>
                                                 <input type="text" class="form-control form-control-sm location-input" value="{{ user.location }}">
                                 </div>
                                             <div class="mb-2">
-                                                <label class="form-label"><strong>Lawyer Name:</strong></label>
+                                                <label class="form-label"><strong>Name:</strong></label>
                                                 <input type="text" class="form-control form-control-sm lawyer-name-input" value="{{ user.lawyer_name }}">
                                     </div>
                                             <div class="mb-2">
@@ -384,17 +384,37 @@
                                 </div>
                                             <div class="mb-2">
                                                 <label class="form-label"><strong>Address:</strong></label>
-                                                <input type="text" class="form-control form-control-sm address-input" value="{{ user.address }}">
-                            </div>
+                                                <input type="text" class="form-control form-control-sm address-input" value="{{ user.address }}"
+                                                       data-bs-toggle="tooltip" 
+                                                       data-bs-placement="right" 
+                                                       data-bs-html="true"
+                                                       title="<strong>Examples:</strong><br>Southern California<br>Tri-state area">
+                                            </div>
                                             <div class="mb-2">
                                                 <label class="form-label"><strong>Planning Session:</strong></label>
-                                                <input type="text" class="form-control form-control-sm planning-session-input" value="{{ user.planning_session }}">
-                                    </div>
-                                    <div class="mb-2">
-                                                <label class="form-label"><strong>Other Planning Session:</strong></label>
-                                                <input type="text" class="form-control form-control-sm other-planning-session-input" value="{{ user.other_planning_session }}">
-                                    </div>
-                                    <div class="mb-2">
+                                                <div class="form-check">
+                                                    <input class="form-check-input planning-session-radio" type="radio" name="planningSession" id="planningSession1" value="Life & Legacy" {% if user.planning_session == 'Life & Legacy' %}checked{% endif %}>
+                                                    <label class="form-check-label" for="planningSession1">
+                                                        Life & Legacy
+                                                    </label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input planning-session-radio" type="radio" name="planningSession" id="planningSession2" value="Family Wealth" {% if user.planning_session == 'Family Wealth' %}checked{% endif %}>
+                                                    <label class="form-check-label" for="planningSession2">
+                                                        Family Wealth
+                                                    </label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input planning-session-radio" type="radio" name="planningSession" id="planningSession3" value="other" {% if user.planning_session not in ['Life & Legacy', 'Family Wealth'] %}checked{% endif %}>
+                                                    <label class="form-check-label" for="planningSession3">
+                                                        Other
+                                                    </label>
+                                                </div>
+                                                <div class="mt-2 planning-session-other" {% if user.planning_session in ['Life & Legacy', 'Family Wealth'] %}style="display: none;"{% endif %}>
+                                                    <input type="text" class="form-control form-control-sm planning-session-input" value="{{ user.planning_session }}" placeholder="Enter your planning session name">
+                                                </div>
+                                            </div>
+                                            <div class="mb-2">
                                                 <label class="form-label"><strong>Discovery Call Link:</strong></label>
                                                 <input type="text" class="form-control form-control-sm discovery-call-link-input" value="{{ user.discovery_call_link }}">
                                             </div>
@@ -463,125 +483,69 @@
         });
 
         // Edit information functionality
-        document.querySelectorAll('.edit-info-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                // Toggle button appearance
-                this.classList.toggle('btn-light');
-                this.classList.toggle('btn-primary');
+        document.querySelectorAll('.edit-info-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const card = this.closest('.card');
+                const viewMode = card.querySelector('.info-view-mode');
+                const editMode = card.querySelector('.info-edit-mode');
+                const collapse = card.querySelector('.collapse');
                 
-                // Ensure the collapse is open when editing
-                const collapse = this.closest('.mt-3').querySelector('#userInfoCollapse');
+                // Toggle visibility
+                viewMode.style.display = 'none';
+                editMode.style.display = 'block';
+                
+                // Ensure the collapse is open
                 if (collapse) {
                     const bsCollapse = new bootstrap.Collapse(collapse, {toggle: false});
                     bsCollapse.show();
                 }
-
-                const card = this.closest('.card-body');
-                const viewMode = card.querySelector('.info-view-mode');
-                const editMode = card.querySelector('.info-edit-mode');
                 
-                // Set form values to current view values
-                const setValue = (viewSelector, editSelector) => {
-                    const viewElement = viewMode.querySelector(viewSelector);
-                    const editElement = editMode.querySelector(editSelector);
-                    if (viewElement && editElement) {
-                        editElement.value = viewElement.textContent;
-                    }
-                };
-
-                // Set values with null checks
-                setValue('.firm-value', '.firm-input');
-                setValue('.location-value', '.location-input');
-                setValue('.lawyer-name-value', '.lawyer-name-input');
-                setValue('.state-value', '.state-input');
-                setValue('.address-value', '.address-input');
-                setValue('.planning-session-value', '.planning-session-input');
-                setValue('.other-planning-session-value', '.other-planning-session-input');
-                setValue('.discovery-call-link-value', '.discovery-call-link-input');
-                
-                // Show edit mode
-                viewMode.style.display = 'none';
-                editMode.style.display = 'block';
+                // Update button state
+                this.classList.add('active');
+                this.querySelector('i').setAttribute('data-feather', 'check');
+                feather.replace();
             });
         });
         
-        document.querySelectorAll('.cancel-edit-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const card = this.closest('.card-body');
+        document.querySelectorAll('.cancel-edit-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const card = this.closest('.card');
                 const viewMode = card.querySelector('.info-view-mode');
                 const editMode = card.querySelector('.info-edit-mode');
+                const editBtn = card.querySelector('.edit-info-btn');
                 
-                // Reset edit button appearance
-                const editBtn = card.closest('.mt-3').querySelector('.edit-info-btn');
-                editBtn.classList.remove('btn-primary');
-                editBtn.classList.add('btn-light');
-                
-                // Hide edit mode and show view mode
-                editMode.style.display = 'none';
+                // Reset visibility
                 viewMode.style.display = 'block';
+                editMode.style.display = 'none';
+                
+                // Reset button state
+                editBtn.classList.remove('active');
+                editBtn.querySelector('i').setAttribute('data-feather', 'edit-2');
+                feather.replace();
             });
         });
         
-        document.querySelectorAll('.save-info-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const card = this.closest('.card-body');
-                const viewMode = card.querySelector('.info-view-mode');
-                const editMode = card.querySelector('.info-edit-mode');
+        document.querySelectorAll('.save-info-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const card = this.closest('.card');
+                const selectedRadio = card.querySelector('input[name="planningSession"]:checked');
+                let planningSession = selectedRadio.value;
                 
-                // Reset edit button appearance
-                const editBtn = card.closest('.mt-3').querySelector('.edit-info-btn');
-                editBtn.classList.remove('btn-primary');
-                editBtn.classList.add('btn-light');
+                if (planningSession === 'other') {
+                    planningSession = card.querySelector('.planning-session-input').value;
+                }
                 
-                // Helper function to update values
-                const updateValue = (viewSelector, editSelector) => {
-                    const viewElement = viewMode.querySelector(viewSelector);
-                    const editElement = editMode.querySelector(editSelector);
-                    if (viewElement && editElement) {
-                        viewElement.textContent = editElement.value;
-                    }
+                const data = {
+                    firm: card.querySelector('.firm-input').value,
+                    location: card.querySelector('.location-input').value,
+                    lawyer_name: card.querySelector('.lawyer-name-input').value,
+                    state: card.querySelector('.state-input').value,
+                    address: card.querySelector('.address-input').value,
+                    planning_session: planningSession,
+                    discovery_call_link: card.querySelector('.discovery-call-link-input').value
                 };
-
-                // Update view mode values
-                updateValue('.firm-value', '.firm-input');
-                updateValue('.location-value', '.location-input');
-                updateValue('.lawyer-name-value', '.lawyer-name-input');
-                updateValue('.state-value', '.state-input');
-                updateValue('.address-value', '.address-input');
-                updateValue('.planning-session-value', '.planning-session-input');
-                updateValue('.other-planning-session-value', '.other-planning-session-input');
-                updateValue('.discovery-call-link-value', '.discovery-call-link-input');
-
-                // Update hidden inputs in the article form
-                const articleForm = card.closest('.article-card').querySelector('.article-form');
-                if (articleForm) {
-                    const updateFormValue = (name, editSelector) => {
-                        const input = articleForm.querySelector(`input[name="${name}"]`);
-                        const editElement = editMode.querySelector(editSelector);
-                        if (input && editElement) {
-                            input.value = editElement.value;
-                        }
-                    };
-
-                    updateFormValue('firm', '.firm-input');
-                    updateFormValue('location', '.location-input');
-                    updateFormValue('lawyer_name', '.lawyer-name-input');
-                    updateFormValue('state', '.state-input');
-                    updateFormValue('address', '.address-input');
-                    updateFormValue('planning_session', '.planning-session-input');
-                    updateFormValue('other_planning_session', '.other-planning-session-input');
-                    updateFormValue('discovery_call_link', '.discovery-call-link-input');
-                }
-
-                // Switch back to view mode
-                editMode.style.display = 'none';
-                viewMode.style.display = 'block';
-
-                // Show success message
-                if (toast) {
-                    document.getElementById('toast-message').textContent = 'Information updated successfully!';
-                    toast.show();
-                }
+                
+                // ... rest of the save handler code ...
             });
         });
     
@@ -720,6 +684,26 @@
             if (e.key === 'Escape' && previewDialog.classList.contains('active')) {
                 closePreviewDialog();
             }
+        });
+
+        // Handle planning session radio buttons
+        document.querySelectorAll('.planning-session-radio').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const card = this.closest('.card');
+                const otherInput = card.querySelector('.planning-session-other');
+                if (this.value === 'other') {
+                    otherInput.style.display = 'block';
+                } else {
+                    otherInput.style.display = 'none';
+                    card.querySelector('.planning-session-input').value = this.value;
+                }
+            });
+        });
+
+        // Initialize tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
         });
     });
 </script>

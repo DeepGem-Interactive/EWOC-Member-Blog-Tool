@@ -30,14 +30,17 @@
         margin-bottom: 1rem;
         padding: 0.75rem;
         border-radius: 0.25rem;
+        position: relative;
     }
     .chat-message.user {
         background-color: #f8f9fa;
         border-left: 3px solid #0d6efd;
+        margin-left: 1rem;
     }
     .chat-message.assistant {
         background-color: #e9ecef;
         border-left: 3px solid #6c757d;
+        margin-right: 1rem;
     }
     .chat-message .timestamp {
         font-size: 0.75rem;
@@ -45,9 +48,112 @@
     }
     .chat-message .content {
         margin-top: 0.5rem;
+        position: relative;
     }
     .chat-message .content.blog {
         white-space: pre-wrap;
+    }
+    .chat-message .content.preview {
+        max-height: 96px; /* Approximately 4 lines of text */
+        overflow: hidden;
+    }
+    .chat-message .content.preview p {
+        margin-bottom: 0.5rem;
+    }
+    .chat-message .content.preview p:last-child {
+        margin-bottom: 0;
+    }
+    .chat-message .content.preview::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 40px;
+        background: linear-gradient(transparent, #fff);
+        pointer-events: none;
+    }
+    .chat-message .show-more-btn {
+        display: none; /* Hide by default */
+        margin-top: 0.5rem;
+        padding: 0.25rem 0.75rem;
+        font-size: 0.875rem;
+        color: #0d6efd;
+        background: none;
+        border: 1px solid #0d6efd;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .chat-message .show-more-btn:hover {
+        background: #0d6efd;
+        color: white;
+    }
+    .chat-message.expanded .content.preview {
+        max-height: none;
+    }
+    .chat-message.expanded .content.preview::after {
+        display: none;
+    }
+    .chat-message.assistant::before {
+        content: "AI";
+        position: absolute;
+        top: -10px;
+        left: -10px;
+        background: #6c757d;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: bold;
+    }
+    .chat-message.user::before {
+        content: "You";
+        position: absolute;
+        top: -10px;
+        right: -10px;
+        background: #0d6efd;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: bold;
+    }
+    .chat-history {
+        position: relative;
+        padding: 1rem;
+        background: #fff;
+        border-radius: 0.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .chat-history::before {
+        display: none;
+    }
+    .new-message-indicator {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #0d6efd;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        cursor: pointer;
+        display: none;
+        z-index: 1000;
+        animation: bounce 2s infinite;
+    }
+    @keyframes bounce {
+        0%, 20%, 50%, 80%, 100% {
+            transform: translateY(0) translateX(-50%);
+        }
+        40% {
+            transform: translateY(-10px) translateX(-50%);
+        }
+        60% {
+            transform: translateY(-5px) translateX(-50%);
+        }
     }
     .nav-tabs .nav-link {
         color: #495057;
@@ -129,21 +235,24 @@
 
                                 <div class="card mb-4">
                                     <div class="card-header bg-light">
-                                        <h2 class="h5 mb-0">AI Assistant</h2>
+                                        <h2 class="h5 mb-0">Chat History</h2>
                                     </div>
                                     <div class="card-body">
                                         <div class="chat-history" style="max-height: 600px; overflow-y: auto;">
                                             {% for message in chat_history %}
                                             <div class="chat-message {{ message.role }} mb-3">
                                                 <div class="message-header d-flex align-items-center mb-1">
-                                                    <span class="badge bg-primary me-2">{{ message.role|title }}</span>
                                                     <small class="text-muted">{{ message.timestamp }}</small>
                                                 </div>
-                                                <div class="message-content {{ 'blog' if message.content_is_blog else '' }}">
+                                                <div class="message-content {{ 'blog' if message.content_is_blog else '' }} preview">
                                                     {{ message.content|markdown|safe }}
                                                 </div>
+                                                <button class="show-more-btn">Show more</button>
                                             </div>
                                             {% endfor %}
+                                        </div>
+                                        <div class="new-message-indicator">
+                                            <i data-feather="arrow-down" class="icon-sm me-1"></i>New message
                                         </div>
                                     </div>
                                 </div>
@@ -340,6 +449,107 @@
                     subtree: true
                 });
             }
+        }
+
+        // Handle chat history scrolling and new message indicator
+        const chatHistory = document.querySelector('.chat-history');
+        const newMessageIndicator = document.querySelector('.new-message-indicator');
+        let lastScrollTop = 0;
+        let isScrolledToBottom = true;
+
+        if (chatHistory && newMessageIndicator) {
+            // Check if scrolled to bottom
+            function isAtBottom() {
+                return Math.abs(chatHistory.scrollHeight - chatHistory.scrollTop - chatHistory.clientHeight) < 10;
+            }
+
+            // Update scroll state
+            chatHistory.addEventListener('scroll', function() {
+                isScrolledToBottom = isAtBottom();
+                if (isScrolledToBottom) {
+                    newMessageIndicator.style.display = 'none';
+                }
+            });
+
+            // Show new message indicator when content changes
+            const observer = new MutationObserver(function(mutations) {
+                if (!isScrolledToBottom) {
+                    newMessageIndicator.style.display = 'block';
+                }
+            });
+
+            observer.observe(chatHistory, {
+                childList: true,
+                subtree: true
+            });
+
+            // Scroll to bottom when clicking the indicator
+            newMessageIndicator.addEventListener('click', function() {
+                chatHistory.scrollTo({
+                    top: chatHistory.scrollHeight,
+                    behavior: 'smooth'
+                });
+                this.style.display = 'none';
+            });
+
+            // Initial scroll to bottom
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        // Handle message previews
+        function initializeMessagePreviews() {
+            const messages = document.querySelectorAll('.chat-message');
+            messages.forEach(message => {
+                const content = message.querySelector('.content');
+                const showMoreBtn = message.querySelector('.show-more-btn');
+                
+                // Force a reflow to get accurate height
+                content.style.display = 'none';
+                content.offsetHeight; // Force reflow
+                content.style.display = '';
+                
+                // Check if content is taller than preview height
+                if (content.scrollHeight > 96) { // Match the max-height from CSS
+                    showMoreBtn.style.display = 'inline-block';
+                    showMoreBtn.textContent = 'Show more';
+                    
+                    // Add click handler if not already added
+                    if (!showMoreBtn.hasAttribute('data-initialized')) {
+                        showMoreBtn.setAttribute('data-initialized', 'true');
+                        showMoreBtn.addEventListener('click', function() {
+                            message.classList.toggle('expanded');
+                            this.textContent = message.classList.contains('expanded') ? 'Show less' : 'Show more';
+                            
+                            // Scroll to show the full message if expanding
+                            if (message.classList.contains('expanded')) {
+                                message.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        });
+                    }
+                } else {
+                    showMoreBtn.style.display = 'none';
+                }
+            });
+        }
+
+        // Initialize message previews after a short delay to ensure content is rendered
+        setTimeout(initializeMessagePreviews, 100);
+
+        // Update message previews when new messages are added
+        if (chatHistory) {
+            const previewObserver = new MutationObserver(function(mutations) {
+                mutations.forEach(mutation => {
+                    if (mutation.addedNodes.length) {
+                        // Wait for content to be rendered
+                        setTimeout(initializeMessagePreviews, 100);
+                    }
+                });
+            });
+
+            previewObserver.observe(chatHistory, {
+                childList: true,
+                subtree: true
+            });
         }
 
         // Handle image generation

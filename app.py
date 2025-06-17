@@ -1334,13 +1334,9 @@ def teardown_db(exception):
 @app.route('/preview_article/<article>')
 def preview_article(article):
     try:
-        # Ensure markdown directory exists
-        markdown_dir = os.path.join('articles', 'markdown')
-        os.makedirs(markdown_dir, exist_ok=True)
-        
         # Try to read markdown file first
         markdown_filename = article.replace('.docx', '.md')
-        markdown_path = os.path.join(markdown_dir, markdown_filename)
+        markdown_path = os.path.join(Config.ARTICLES_DIR, markdown_filename)
         
         if os.path.exists(markdown_path):
             # Read the markdown content
@@ -1351,10 +1347,6 @@ def preview_article(article):
             docx_path = os.path.join(Config.ARTICLES_DIR, article)
             doc = Document(docx_path)
             content = "\n".join([para.text for para in doc.paragraphs])
-            
-            # Save as markdown for future use
-            with open(markdown_path, 'w', encoding='utf-8') as f:
-                f.write(content)
             
         # Convert the content to HTML for preview
         html_content = markdown.markdown(content)
