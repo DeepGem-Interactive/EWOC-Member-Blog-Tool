@@ -1326,7 +1326,7 @@ def generate_image():
         session.modified = True
     
     return redirect(url_for('review'))
-    
+
 @app.teardown_appcontext
 def teardown_db(exception):
     close_db()
@@ -1334,18 +1334,33 @@ def teardown_db(exception):
 @app.route('/preview_article/<article>')
 def preview_article(article):
     try:
-        # Convert the article name from .docx to .md
-        markdown_filename = article.replace('.docx', '.md')
-        markdown_path = os.path.join('articles', 'markdown', markdown_filename)
+        # Ensure markdown directory exists
+        markdown_dir = os.path.join('articles', 'markdown')
+        os.makedirs(markdown_dir, exist_ok=True)
         
-        # Read the markdown content
-        with open(markdown_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        # Try to read markdown file first
+        markdown_filename = article.replace('.docx', '.md')
+        markdown_path = os.path.join(markdown_dir, markdown_filename)
+        
+        if os.path.exists(markdown_path):
+            # Read the markdown content
+            with open(markdown_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        else:
+            # If markdown doesn't exist, read from docx
+            docx_path = os.path.join(Config.ARTICLES_DIR, article)
+            doc = Document(docx_path)
+            content = "\n".join([para.text for para in doc.paragraphs])
             
-        # Convert the markdown content to HTML for preview
+            # Save as markdown for future use
+            with open(markdown_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+        # Convert the content to HTML for preview
         html_content = markdown.markdown(content)
         return jsonify({'content': html_content})
     except Exception as e:
+        print(f"Error in preview_article: {str(e)}")  # Add logging
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
