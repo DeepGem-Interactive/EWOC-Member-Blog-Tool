@@ -17,6 +17,15 @@ from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 import re
 from docx.oxml.shared import OxmlElement
 from docx.oxml.ns import qn
+import hashlib
+import secrets
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+import sqlite3
+import base64
+import io
+from PIL import Image
+import uuid
 
 load_dotenv()
 
@@ -51,7 +60,7 @@ def get_db():
         g.db = pyodbc.connect(conn_str)
     return g.db
 
-def close_db(e=None):
+def close_db():
     db = g.pop('db', None)
     if db is not None:
         db.close()
@@ -68,7 +77,7 @@ def init_db():
             id INT IDENTITY(1,1) PRIMARY KEY,
             username NVARCHAR(255) UNIQUE NOT NULL,
             email NVARCHAR(255) UNIQUE NOT NULL,
-            password NVARCHAR(255) NOT NULL,
+            password NVARCHAR(500) NOT NULL,
             firm NVARCHAR(255),
             location NVARCHAR(255),
             lawyer_name NVARCHAR(255),
@@ -109,6 +118,14 @@ def init_db():
             cursor.execute('''
             IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'discovery_call_link')
             ALTER TABLE users ADD discovery_call_link NVARCHAR(255)
+            ''')
+        except pyodbc.Error:
+            pass
+        
+        # Update password column size to accommodate hashed passwords
+        try:
+            cursor.execute('''
+            ALTER TABLE users ALTER COLUMN password NVARCHAR(500)
             ''')
         except pyodbc.Error:
             pass
@@ -168,6 +185,19 @@ def init_db():
                 '',
                 ''
             ))
+        
+        # Create password_resets table if it doesn't exist
+        cursor.execute('''
+        IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='password_resets' AND xtype='U')
+        CREATE TABLE password_resets (
+            id INTEGER IDENTITY(1,1) PRIMARY KEY,
+            email NVARCHAR(255) NOT NULL,
+            token NVARCHAR(255) NOT NULL UNIQUE,
+            expires DATETIME NOT NULL,
+            used INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT GETDATE()
+        )
+        ''')
         
         db.commit()
 
@@ -549,7 +579,14 @@ class AzureServices:
                 2. The fourth paragraph (Plug) - Keep it exactly as is
                 3. The last paragraph (Disclaimer) - Keep it exactly as is
                 
-                These sections must remain unchanged in both content and position.
+                CRITICAL: DO NOT REPEAT THESE SECTIONS:
+                1. The hook paragraph should appear ONLY ONCE at the beginning
+                2. The plug paragraph should appear ONLY ONCE in its original position
+                3. The disclaimer paragraph should appear ONLY ONCE at the end
+                4. DO NOT include these preserved sections anywhere else in the article
+                5. DO NOT create new paragraphs that repeat the same content as the hook, plug, or disclaimer
+                
+                These sections must remain unchanged in both content and position, and must not be duplicated anywhere else in the article.
                 
                 SEO REQUIREMENTS:
                 1. Must include these elements:
@@ -615,7 +652,12 @@ class AzureServices:
                 6. Don't include more than 5 sources
                 7. Don't exceed 1200 words
                 8. Don't use more than 3 lists
+                9. Don't repeat any paragraph meaning no same paragraph should be present
+                10. DO NOT repeat the hook, plug, or disclaimer paragraphs anywhere else in the article
+                11. DO NOT create new content that duplicates the preserved sections
+                12. DO NOT include the preserved sections in the dynamic components list - they should only appear in their original positions
                 
+
                 CTA REQUIREMENTS:
                 1. MUST use the exact phrase "15-minute Discovery Call" (never "consultation" or "consult")
                 2. Standard format: "Schedule your complimentary 15-minute Discovery Call with {firm_name} today"
@@ -683,6 +725,7 @@ class AzureServices:
                     2. Return the COMPLETE updated blog (not just updated part) in markdown format
                     3. Don't include any commentary or explanations
                     4. Preserve all formatting and structure
+                    5. Don't repeat any paragraph meaning no same paragraph should be present.
                 """}
             ]
         
@@ -814,7 +857,9 @@ class FileManager:
         Returns:
             Extracted text content
         """
-        doc = Document(os.path.join(Config.ARTICLES_DIR, filename))
+        # Use safe path validation
+        filepath = get_safe_file_path(Config.ARTICLES_DIR, filename)
+        doc = Document(filepath)
         return "\n".join([para.text for para in doc.paragraphs])
     
     @staticmethod
@@ -950,21 +995,56 @@ def profile():
         return redirect(url_for('login'))
     
     if request.method == 'POST':
-        firm = request.form['firm']
-        location = request.form['location']
-        lawyer_name = request.form['lawyer_name']
-        state = request.form['state']
-        keywords = request.form.get('keywords', '')
+        # Handle both form data and JSON requests
+        if request.is_json:
+            data = request.get_json()
+            firm = data.get('firm', '')
+            location = data.get('location', '')
+            lawyer_name = data.get('lawyer_name', '')
+            state = data.get('state', '')
+            address = data.get('address', '')
+            planning_session = data.get('planning_session', '')
+            discovery_call_link = data.get('discovery_call_link', '')
+            keywords = data.get('keywords', '')
+        else:
+            firm = request.form['firm']
+            location = request.form['location']
+            lawyer_name = request.form['lawyer_name']
+            state = request.form['state']
+            address = request.form.get('address', '')
+            planning_session = request.form.get('planning_session', '')
+            discovery_call_link = request.form.get('discovery_call_link', '')
+            keywords = request.form.get('keywords', '')
         
-        if UserSession.update_profile(user['username'], firm, location, lawyer_name, state, keywords):
+        if UserSession.update_profile(user['username'], firm, location, lawyer_name, state, address, planning_session, "", discovery_call_link):
             session['user']['firm'] = firm
             session['user']['location'] = location
             session['user']['lawyer_name'] = lawyer_name
             session['user']['state'] = state
+            session['user']['address'] = address
+            session['user']['planning_session'] = planning_session
+            session['user']['discovery_call_link'] = discovery_call_link
             session['user']['keywords'] = keywords
             session.modified = True
             
+            # Return JSON response for AJAX requests
+            if request.is_json:
+                return jsonify({
+                    'success': True,
+                    'firm': firm,
+                    'location': location,
+                    'lawyer_name': lawyer_name,
+                    'state': state,
+                    'address': address,
+                    'planning_session': planning_session,
+                    'discovery_call_link': discovery_call_link
+                })
+            
             return redirect(url_for('dashboard'))
+        
+        # Return JSON response for AJAX requests
+        if request.is_json:
+            return jsonify({'success': False, 'error': 'Update failed'}), 400
         
         return render_template('profile.html', error="Update failed", user=session['user'])
     
@@ -977,6 +1057,84 @@ def login():
             return redirect(url_for('dashboard'))
         return render_template('login.html', error="Invalid credentials")
     return render_template('login.html')
+
+@app.route('/forgot_password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form['email']
+        
+        # Check if user exists
+        db = get_db()
+        user = db.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+        
+        if user:
+            # Generate reset token
+            token = secrets.token_urlsafe(32)
+            expires = datetime.now() + timedelta(hours=24)
+            
+            # Store reset token in database (SQL Server compatible)
+            # First, delete any existing tokens for this email
+            db.execute('DELETE FROM password_resets WHERE email = ?', (email,))
+            
+            # Then insert the new token
+            db.execute('''
+                INSERT INTO password_resets (email, token, expires)
+                VALUES (?, ?, ?)
+            ''', (email, token, expires))
+            db.commit()
+            
+            # In a real application, you would send an email here
+            # For now, we'll just show a success message with the token
+            reset_url = url_for('reset_password', token=token, _external=True)
+            
+            return render_template('forgot_password.html', 
+                                 success=f"Password reset link sent! For demo purposes, here's the link: {reset_url}")
+        else:
+            return render_template('forgot_password.html', 
+                                 error="If an account with that email exists, a reset link has been sent.")
+    
+    return render_template('forgot_password.html')
+
+@app.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    db = get_db()
+    
+    # Check if token is valid and not expired
+    reset_record = db.execute('''
+        SELECT * FROM password_resets 
+        WHERE token = ? AND expires > ? AND used = 0
+    ''', (token, datetime.now())).fetchone()
+    
+    if not reset_record:
+        return render_template('reset_password.html', token=token,
+                             error="Invalid or expired reset link. Please request a new one.")
+    
+    if request.method == 'POST':
+        password = request.form['password']
+        confirm_password = request.form['confirm_password']
+        
+        if password != confirm_password:
+            return render_template('reset_password.html', token=token,
+                                 error="Passwords do not match.")
+        
+        if len(password) < 6:
+            return render_template('reset_password.html', token=token,
+                                 error="Password must be at least 6 characters long.")
+        
+        # Update user password - use index-based access for SQL Server cursor
+        hashed_password = generate_password_hash(password)
+        # reset_record[1] is the email field (index 1)
+        db.execute('UPDATE users SET password = ? WHERE email = ?', 
+                  (hashed_password, reset_record[1]))
+        
+        # Mark token as used
+        db.execute('UPDATE password_resets SET used = 1 WHERE token = ?', (token,))
+        db.commit()
+        
+        return render_template('reset_password.html', token=token,
+                             success="Password reset successfully! You can now login with your new password.")
+    
+    return render_template('reset_password.html', token=token)
 
 @app.route('/logout')
 def logout():
@@ -1052,6 +1210,11 @@ def select_article(article):
     user = UserSession.get_current_user()
     if not user:
         return redirect(url_for('login'))
+    
+    # Initialize variables that will be used in both GET and POST
+    firm = ''
+    location = ''
+    
     if request.method == 'POST':
         tone = request.form.get('tone')
         tone_description = request.form.get('toneDescription')
@@ -1164,7 +1327,9 @@ def review():
     if filename and 'current_post' not in session:
         # Try to load the content from the file
         try:
-            with open(os.path.join(Config.GENERATED_DIR, filename), 'r', encoding='utf-8') as f:
+            # Use safe path validation
+            filepath = get_safe_file_path(Config.GENERATED_DIR, filename)
+            with open(filepath, 'r', encoding='utf-8') as f:
                 content = f.read()
                 
             # Set up the session data
@@ -1184,6 +1349,9 @@ def review():
             
             # Generate a unique session ID for the chat
             session['session_id'] = os.urandom(16).hex()
+        except (ValueError, FileNotFoundError) as e:
+            print(f"Error loading file: {e}")
+            return redirect(url_for('dashboard'))
         except Exception as e:
             print(f"Error loading file: {e}")
             return redirect(url_for('dashboard'))
@@ -1291,8 +1459,8 @@ def download(filename):
         return redirect(url_for('dashboard'))
     
     try:
-        # Read generated content
-        filepath = os.path.join(Config.GENERATED_DIR, filename)
+        # Read generated content using safe path validation
+        filepath = get_safe_file_path(Config.GENERATED_DIR, filename)
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
         
@@ -1309,6 +1477,9 @@ def download(filename):
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         )
         
+    except (ValueError, FileNotFoundError) as e:
+        print(f"File access error: {e}")
+        return redirect(url_for('review'))
     except Exception as e:
         print(f"DOCX generation failed: {e}")
         return redirect(url_for('review'))
@@ -1326,7 +1497,7 @@ def generate_image():
         session.modified = True
     
     return redirect(url_for('review'))
-
+    
 @app.teardown_appcontext
 def teardown_db(exception):
     close_db()
@@ -1334,9 +1505,13 @@ def teardown_db(exception):
 @app.route('/preview_article/<article>')
 def preview_article(article):
     try:
+        # Validate the article filename first
+        if not is_safe_filename(article):
+            return jsonify({'error': 'Invalid article name'}), 400
+        
         # Try to read markdown file first
         markdown_filename = article.replace('.docx', '.md')
-        markdown_path = os.path.join(Config.ARTICLES_DIR, markdown_filename)
+        markdown_path = get_safe_file_path(Config.ARTICLES_DIR, markdown_filename)
         
         if os.path.exists(markdown_path):
             # Read the markdown content
@@ -1344,16 +1519,50 @@ def preview_article(article):
                 content = f.read()
         else:
             # If markdown doesn't exist, read from docx
-            docx_path = os.path.join(Config.ARTICLES_DIR, article)
+            docx_path = get_safe_file_path(Config.ARTICLES_DIR, article)
             doc = Document(docx_path)
             content = "\n".join([para.text for para in doc.paragraphs])
             
         # Convert the content to HTML for preview
         html_content = markdown.markdown(content)
         return jsonify({'content': html_content})
+    except (ValueError, FileNotFoundError) as e:
+        print(f"File access error in preview_article: {str(e)}")
+        return jsonify({'error': 'Article not found'}), 404
     except Exception as e:
         print(f"Error in preview_article: {str(e)}")  # Add logging
         return jsonify({'error': str(e)}), 500
+
+def is_safe_filename(filename):
+    """Validate that filename is safe and doesn't contain path traversal characters"""
+    if not filename:
+        return False
+    
+    # Check for path traversal characters
+    dangerous_chars = ['..', '/', '\\', ':', '*', '?', '"', '<', '>', '|']
+    for char in dangerous_chars:
+        if char in filename:
+            return False
+    
+    # Check if filename is only alphanumeric, dots, hyphens, and underscores
+    if not re.match(r'^[a-zA-Z0-9._-]+$', filename):
+        return False
+    
+    return True
+
+def get_safe_file_path(base_dir, filename):
+    """Safely construct a file path within the base directory"""
+    if not is_safe_filename(filename):
+        raise ValueError("Invalid filename")
+    
+    # Normalize the path to prevent path traversal
+    full_path = os.path.normpath(os.path.join(base_dir, filename))
+    
+    # Ensure the path is within the base directory
+    if not full_path.startswith(os.path.abspath(base_dir)):
+        raise ValueError("Path traversal detected")
+    
+    return full_path
 
 if __name__ == '__main__':
     app.run(debug=True)

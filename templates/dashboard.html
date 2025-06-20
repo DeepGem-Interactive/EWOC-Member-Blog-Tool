@@ -216,6 +216,61 @@
     .close-preview:hover {
         color: var(--nlbm-dark-gray);
     }
+
+    /* Fix for floating buttons */
+    .info-edit-mode {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .info-edit-mode .mt-3 {
+        position: relative;
+        z-index: 1;
+        margin-top: 1rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid #dee2e6;
+    }
+
+    .save-info-btn,
+    .cancel-edit-btn {
+        position: relative;
+        z-index: 2;
+    }
+
+    /* Save message styling */
+    .save-message {
+        position: relative;
+        z-index: 3;
+        margin-top: 0.75rem !important;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        animation: fadeInUp 0.3s ease-out;
+    }
+
+    .save-message.alert-success {
+        background-color: #d1e7dd;
+        border: 1px solid #badbcc;
+        color: #0f5132;
+    }
+
+    .save-message.alert-danger {
+        background-color: #f8d7da;
+        border: 1px solid #f5c2c7;
+        color: #842029;
+    }
+
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
 </style>
 {% endblock %}
 
@@ -389,7 +444,7 @@
                                                        data-bs-placement="right" 
                                                        data-bs-html="true"
                                                        title="<strong>Examples:</strong><br>Southern California<br>Tri-state area">
-                                            </div>
+                            </div>
                                             <div class="mb-2">
                                                 <label class="form-label"><strong>Planning Session:</strong></label>
                                                 <div class="form-check">
@@ -412,15 +467,15 @@
                                                 </div>
                                                 <div class="mt-2 planning-session-other" {% if user.planning_session in ['Life & Legacy', 'Family Wealth'] %}style="display: none;"{% endif %}>
                                                     <input type="text" class="form-control form-control-sm planning-session-input" value="{{ user.planning_session }}" placeholder="Enter your planning session name">
-                                                </div>
-                                            </div>
-                                            <div class="mb-2">
+                                    </div>
+                                    </div>
+                                    <div class="mb-2">
                                                 <label class="form-label"><strong>Discovery Call Link:</strong></label>
                                                 <input type="text" class="form-control form-control-sm discovery-call-link-input" value="{{ user.discovery_call_link }}">
                                             </div>
-                                            <div class="d-flex gap-2 mt-3">
-                                                <button type="button" class="btn btn-sm btn-primary save-info-btn">Save Changes</button>
-                                                <button type="button" class="btn btn-sm btn-secondary cancel-edit-btn">Cancel</button>
+                                            <div class="mt-3">
+                                                <button type="button" class="btn btn-sm btn-primary save-info-btn w-100 mb-2">Save Changes</button>
+                                                <button type="button" class="btn btn-sm btn-secondary cancel-edit-btn w-100">Cancel</button>
                                             </div>
                                         </div>
                                     </div>
@@ -451,6 +506,24 @@
                     <span class="visually-hidden">Loading...</span>
                 </div>
                 <h5 class="text-dark mb-0">Generating your blog...</h5>
+            </div>
+        </div>
+
+        <!-- Save Message Modal -->
+        <div class="modal fade" id="saveMessageModal" tabindex="-1" aria-labelledby="saveMessageModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header border-0 pb-0">
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body text-center pb-4">
+                        <div id="saveMessageIcon" class="mb-3">
+                            <!-- Icon will be inserted here -->
+                        </div>
+                        <h5 class="modal-title" id="saveMessageModalLabel">Save Status</h5>
+                        <p id="saveMessageText" class="mb-0">Message will appear here</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -499,11 +572,14 @@
                     const bsCollapse = new bootstrap.Collapse(collapse, {toggle: false});
                     bsCollapse.show();
                 }
-                
-                // Update button state
+
+                // Update button state with null check
                 this.classList.add('active');
-                this.querySelector('i').setAttribute('data-feather', 'check');
-                feather.replace();
+                const icon = this.querySelector('i');
+                if (icon) {
+                    icon.setAttribute('data-feather', 'check');
+                    feather.replace();
+                }
             });
         });
         
@@ -518,36 +594,185 @@
                 viewMode.style.display = 'block';
                 editMode.style.display = 'none';
                 
-                // Reset button state
-                editBtn.classList.remove('active');
-                editBtn.querySelector('i').setAttribute('data-feather', 'edit-2');
-                feather.replace();
+                // Reset button state with null check
+                if (editBtn) {
+                    editBtn.classList.remove('active');
+                    const icon = editBtn.querySelector('i');
+                    if (icon) {
+                        icon.setAttribute('data-feather', 'edit-2');
+                        feather.replace();
+                    }
+                }
             });
         });
         
         document.querySelectorAll('.save-info-btn').forEach(button => {
             button.addEventListener('click', function() {
+                console.log('Save button clicked'); // Debug log
+                
+                // Show loading state
+                const originalText = this.textContent;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving...';
+                this.disabled = true;
+                
                 const card = this.closest('.card');
+                console.log('Card found:', card); // Debug log
+                
                 const selectedRadio = card.querySelector('input[name="planningSession"]:checked');
-                let planningSession = selectedRadio.value;
+                console.log('Selected radio:', selectedRadio); // Debug log
+                let planningSession = selectedRadio ? selectedRadio.value : '';
                 
                 if (planningSession === 'other') {
-                    planningSession = card.querySelector('.planning-session-input').value;
+                    const otherInput = card.querySelector('.planning-session-input');
+                    console.log('Other input:', otherInput); // Debug log
+                    planningSession = otherInput ? otherInput.value : '';
                 }
                 
+                // Check each form element individually
+                const firmInput = card.querySelector('.firm-input');
+                const locationInput = card.querySelector('.location-input');
+                const lawyerNameInput = card.querySelector('.lawyer-name-input');
+                const stateInput = card.querySelector('.state-input');
+                const addressInput = card.querySelector('.address-input');
+                const discoveryCallLinkInput = card.querySelector('.discovery-call-link-input');
+                
+                console.log('Form elements found:', {
+                    firmInput,
+                    locationInput,
+                    lawyerNameInput,
+                    stateInput,
+                    addressInput,
+                    discoveryCallLinkInput
+                }); // Debug log
+                
                 const data = {
-                    firm: card.querySelector('.firm-input').value,
-                    location: card.querySelector('.location-input').value,
-                    lawyer_name: card.querySelector('.lawyer-name-input').value,
-                    state: card.querySelector('.state-input').value,
-                    address: card.querySelector('.address-input').value,
+                    firm: (firmInput || {}).value || '',
+                    location: (locationInput || {}).value || '',
+                    lawyer_name: (lawyerNameInput || {}).value || '',
+                    state: (stateInput || {}).value || '',
+                    address: (addressInput || {}).value || '',
                     planning_session: planningSession,
-                    discovery_call_link: card.querySelector('.discovery-call-link-input').value
+                    discovery_call_link: (discoveryCallLinkInput || {}).value || ''
                 };
                 
-                // ... rest of the save handler code ...
+                console.log('Sending data:', data); // Debug log
+                
+                // Send the data to the server
+                fetch('/profile', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => {
+                    console.log('Response status:', response.status); // Debug log
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Response data:', data); // Debug log
+                    
+                    // Reset button state
+                    this.innerHTML = originalText;
+                    this.disabled = false;
+                    
+                    if (data.success) {
+                        // Update the view mode with new values
+                        const viewMode = card.querySelector('.info-view-mode');
+                        
+                        // Update fields with null checks
+                        const firmValue = viewMode.querySelector('.firm-value');
+                        if (firmValue) firmValue.textContent = data.firm;
+                        
+                        const locationValue = viewMode.querySelector('.location-value');
+                        if (locationValue) locationValue.textContent = data.location;
+                        
+                        const lawyerNameValue = viewMode.querySelector('.lawyer-name-value');
+                        if (lawyerNameValue) lawyerNameValue.textContent = data.lawyer_name;
+                        
+                        const stateValue = viewMode.querySelector('.state-value');
+                        if (stateValue) stateValue.textContent = data.state;
+                        
+                        const addressValue = viewMode.querySelector('.address-value');
+                        if (addressValue) addressValue.textContent = data.address;
+                        
+                        const planningSessionValue = viewMode.querySelector('.planning-session-value');
+                        if (planningSessionValue) planningSessionValue.textContent = data.planning_session;
+                        
+                        const discoveryCallLinkValue = viewMode.querySelector('.discovery-call-link-value');
+                        if (discoveryCallLinkValue) discoveryCallLinkValue.textContent = data.discovery_call_link;
+
+                        // Switch back to view mode
+                        const editMode = card.querySelector('.info-edit-mode');
+                        const editBtn = card.querySelector('.edit-info-btn');
+                        
+                        viewMode.style.display = 'block';
+                        editMode.style.display = 'none';
+                        
+                        // Reset button state with null checks
+                        if (editBtn) {
+                            editBtn.classList.remove('active');
+                            const editIcon = editBtn.querySelector('i');
+                            if (editIcon) {
+                                editIcon.setAttribute('data-feather', 'edit-2');
+                            }
+                        }
+                        feather.replace();
+
+                        // Show success message
+                        console.log('Showing success message'); // Debug log
+                        showSaveMessage(card, 'Changes Saved', 'success');
+                    } else {
+                        console.log('Showing error message'); // Debug log
+                        showSaveMessage(card, 'Failed to save changes. Please try again.', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    
+                    // Reset button state
+                    this.innerHTML = originalText;
+                    this.disabled = false;
+                    
+                    showSaveMessage(card, 'Failed to save changes. Please try again.', 'error');
+                });
             });
         });
+        
+        // Function to show save message
+        function showSaveMessage(card, message, type) {
+            console.log('showSaveMessage called with:', message, type); // Debug log
+            
+            const modal = document.getElementById('saveMessageModal');
+            const modalInstance = new bootstrap.Modal(modal);
+            const iconContainer = document.getElementById('saveMessageIcon');
+            const messageText = document.getElementById('saveMessageText');
+            const modalTitle = document.getElementById('saveMessageModalLabel');
+            
+            // Set the message text
+            messageText.textContent = message;
+            
+            // Set the title based on type
+            modalTitle.textContent = type === 'success' ? 'Success!' : 'Error';
+            
+            // Set the icon based on type
+            if (type === 'success') {
+                iconContainer.innerHTML = '<i data-feather="check-circle" style="color: #198754; width: 48px; height: 48px;"></i>';
+            } else {
+                iconContainer.innerHTML = '<i data-feather="alert-circle" style="color: #dc3545; width: 48px; height: 48px;"></i>';
+            }
+            
+            // Replace feather icons
+            feather.replace();
+            
+            // Show the modal
+            modalInstance.show();
+            
+            // Auto-hide modal after 3 seconds
+            setTimeout(() => {
+                modalInstance.hide();
+            }, 3000);
+        }
     
         // Filter button click handler
         document.querySelectorAll('.filter-btn').forEach(btn => {
