@@ -185,7 +185,9 @@
         <div class="d-flex justify-content-between align-items-center">
             <h1 class="h3 mb-0">Review Blog Post</h1>
             <div>
+                {% if post.filename %}
                 <a href="{{ url_for('download', filename=post.filename) }}" class="btn btn-outline-primary me-2">Download File</a>
+                {% endif %}
                 <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">Back to Dashboard</a>
             </div>
         </div>
@@ -405,9 +407,10 @@
                 // Disable the button
                 applyChangesBtn.disabled = true;
                 // Show spinner
-                applyChangesBtn.querySelector('.spinner-border').style.display = 'inline-block';
-                // Change button text
-                applyChangesBtn.querySelector('.button-text').textContent = 'Applying Changes...';
+                const spinner = applyChangesBtn.querySelector('.spinner-border');
+                const buttonText = applyChangesBtn.querySelector('.button-text');
+                if (spinner) spinner.style.display = 'inline-block';
+                if (buttonText) buttonText.textContent = 'Applying Changes...';
             });
         }
 
@@ -502,6 +505,11 @@
             messages.forEach(message => {
                 const content = message.querySelector('.content');
                 const showMoreBtn = message.querySelector('.show-more-btn');
+                
+                // Check if elements exist before accessing their properties
+                if (!content || !showMoreBtn) {
+                    return; // Skip this message if elements don't exist
+                }
                 
                 // Force a reflow to get accurate height
                 content.style.display = 'none';

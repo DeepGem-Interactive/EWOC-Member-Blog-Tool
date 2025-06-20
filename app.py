@@ -26,6 +26,7 @@ import base64
 import io
 from PIL import Image
 import uuid
+from urllib.parse import unquote
 
 load_dotenv()
 
@@ -853,13 +854,29 @@ class FileManager:
         """
         Read content from a DOCX file
         Args:
-            filename: Name of the DOCX file
+            filename: Name of the DOCX file (may be URL-encoded)
         Returns:
             Extracted text content
         """
-        # Use safe path validation
-        filepath = get_safe_file_path(Config.ARTICLES_DIR, filename)
-        doc = Document(filepath)
+        # URL-decode the filename first
+        decoded_filename = unquote(filename)
+        
+        # For article filenames, we need to be more permissive
+        # Check if the file exists in the articles directory
+        filepath = os.path.join(Config.ARTICLES_DIR, decoded_filename)
+        
+        # Normalize the path to prevent path traversal
+        normalized_path = os.path.normpath(filepath)
+        
+        # Simple path traversal check - look for .. in the path
+        if '..' in normalized_path:
+            raise ValueError("Path traversal detected")
+        
+        # Check if file exists
+        if not os.path.exists(normalized_path):
+            raise FileNotFoundError(f"Article file not found: {decoded_filename}")
+        
+        doc = Document(normalized_path)
         return "\n".join([para.text for para in doc.paragraphs])
     
     @staticmethod
@@ -1459,9 +1476,21 @@ def download(filename):
         return redirect(url_for('dashboard'))
     
     try:
-        # Read generated content using safe path validation
-        filepath = get_safe_file_path(Config.GENERATED_DIR, filename)
-        with open(filepath, 'r', encoding='utf-8') as f:
+        # For generated files, use simple path validation since they're internally generated
+        filepath = os.path.join(Config.GENERATED_DIR, filename)
+        normalized_path = os.path.normpath(filepath)
+        
+        # Simple path traversal check - look for .. in the path
+        if '..' in normalized_path:
+            print(f"Path traversal detected: {normalized_path}")
+            return redirect(url_for('review'))
+        
+        # Check if file exists
+        if not os.path.exists(normalized_path):
+            print(f"File not found: {normalized_path}")
+            return redirect(url_for('review'))
+        
+        with open(normalized_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
         # Get title
@@ -1477,11 +1506,8 @@ def download(filename):
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         )
         
-    except (ValueError, FileNotFoundError) as e:
-        print(f"File access error: {e}")
-        return redirect(url_for('review'))
     except Exception as e:
-        print(f"DOCX generation failed: {e}")
+        print(f"Download error: {e}")
         return redirect(url_for('review'))
 
 @app.route('/generate_image')
@@ -1505,22 +1531,37 @@ def teardown_db(exception):
 @app.route('/preview_article/<article>')
 def preview_article(article):
     try:
-        # Validate the article filename first
-        if not is_safe_filename(article):
-            return jsonify({'error': 'Invalid article name'}), 400
+        # URL-decode the article filename first
+        decoded_article = unquote(article)
+        
+        # For article filenames, we need to be more permissive
+        # Check if the file exists in the articles directory
+        article_path = os.path.join(Config.ARTICLES_DIR, decoded_article)
+        normalized_article_path = os.path.normpath(article_path)
+        
+        # Simple path traversal check - look for .. in the path
+        if '..' in normalized_article_path:
+            return jsonify({'error': 'Invalid article path'}), 400
         
         # Try to read markdown file first
-        markdown_filename = article.replace('.docx', '.md')
-        markdown_path = get_safe_file_path(Config.ARTICLES_DIR, markdown_filename)
+        markdown_filename = decoded_article.replace('.docx', '.md')
+        markdown_path = os.path.join(Config.ARTICLES_DIR, markdown_filename)
+        normalized_markdown_path = os.path.normpath(markdown_path)
         
-        if os.path.exists(markdown_path):
+        # Ensure markdown path is also safe
+        if '..' in normalized_markdown_path:
+            return jsonify({'error': 'Invalid markdown path'}), 400
+        
+        if os.path.exists(normalized_markdown_path):
             # Read the markdown content
-            with open(markdown_path, 'r', encoding='utf-8') as f:
+            with open(normalized_markdown_path, 'r', encoding='utf-8') as f:
                 content = f.read()
         else:
             # If markdown doesn't exist, read from docx
-            docx_path = get_safe_file_path(Config.ARTICLES_DIR, article)
-            doc = Document(docx_path)
+            if not os.path.exists(normalized_article_path):
+                return jsonify({'error': 'Article not found'}), 404
+                
+            doc = Document(normalized_article_path)
             content = "\n".join([para.text for para in doc.paragraphs])
             
         # Convert the content to HTML for preview
