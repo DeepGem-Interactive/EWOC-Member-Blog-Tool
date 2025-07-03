@@ -124,10 +124,13 @@
                     <a class="nav-item nav-link" href="{{ url_for('profile') }}">
                         <i data-feather="user" class="icon-sm me-1"></i>{{ session.get('user').lawyer_name }}
                     </a>
+                    <button class="nav-item nav-link btn btn-link" data-bs-toggle="modal" data-bs-target="#feedbackModal">
+                        <i data-feather="message-circle" class="icon-sm me-1"></i>Feedback
+                    </button>
                     <a class="nav-item nav-link" href="{{ url_for('logout') }}">
                         <i data-feather="log-out" class="icon-sm me-1"></i>Logout
                     </a>
-                <div>
+                </div>
             </div>
             {% endif %}
         </div>
@@ -137,6 +140,67 @@
     <main class="container fade-in">
         {% block content %}{% endblock %}
     </main>
+
+    <!-- Feedback Modal -->
+    <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="feedbackModalLabel">
+                        <i data-feather="message-circle" class="icon-sm me-2"></i>Share Your Feedback
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="feedbackForm" method="POST" action="{{ url_for('submit_feedback') }}">
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="feedbackType" class="form-label">Feedback Type</label>
+                                <select class="form-select" id="feedbackType" name="feedback_type" required>
+                                    <option value="">Select feedback type...</option>
+                                    <option value="bug">Bug Report</option>
+                                    <option value="feature">Feature Request</option>
+                                    <option value="improvement">Improvement Suggestion</option>
+                                    <option value="general">General Feedback</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="feedbackPriority" class="form-label">Priority</label>
+                                <select class="form-select" id="feedbackPriority" name="priority">
+                                    <option value="low">Low</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="high">High</option>
+                                    <option value="urgent">Urgent</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="feedbackSubject" class="form-label">Subject</label>
+                            <input type="text" class="form-control" id="feedbackSubject" name="subject" 
+                                   placeholder="Brief description of your feedback" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="feedbackMessage" class="form-label">Message</label>
+                            <textarea class="form-control" id="feedbackMessage" name="message" rows="5" 
+                                      placeholder="Please provide detailed feedback about your experience..." required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="feedbackEmail" class="form-label">Contact Email (Optional)</label>
+                            <input type="email" class="form-control" id="feedbackEmail" name="contact_email" 
+                                   placeholder="your.email@example.com">
+                            <div class="form-text">We'll only use this to follow up on your feedback if needed.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i data-feather="send" class="icon-sm me-1"></i>Submit Feedback
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <!-- Footer with copyright information -->
     <footer class="container mt-5 mb-4 text-center">
@@ -148,6 +212,79 @@
     <script>
         // Initialize Feather icons
         feather.replace();
+        
+        // Handle feedback form submission
+        document.addEventListener('DOMContentLoaded', function() {
+            const feedbackForm = document.getElementById('feedbackForm');
+            if (feedbackForm) {
+                feedbackForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const formData = new FormData(feedbackForm);
+                    const submitBtn = feedbackForm.querySelector('button[type="submit"]');
+                    const originalText = submitBtn.innerHTML;
+                    
+                    // Disable submit button and show loading state
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i data-feather="loader" class="icon-sm me-1"></i>Submitting...';
+                    feather.replace();
+                    
+                    fetch('{{ url_for("submit_feedback") }}', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Show success message
+                            showAlert('success', 'Thank you for your feedback! We\'ll review it and get back to you if needed.');
+                            feedbackForm.reset();
+                            // Close modal
+                            const modal = bootstrap.Modal.getInstance(document.getElementById('feedbackModal'));
+                            modal.hide();
+                        } else {
+                            // Show error message
+                            showAlert('danger', data.message || 'An error occurred while submitting feedback. Please try again.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showAlert('danger', 'An error occurred while submitting feedback. Please try again.');
+                    })
+                    .finally(() => {
+                        // Re-enable submit button
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalText;
+                        feather.replace();
+                    });
+                });
+            }
+        });
+        
+        // Function to show alerts
+        function showAlert(type, message) {
+            // Remove existing alerts
+            const existingAlerts = document.querySelectorAll('.alert');
+            existingAlerts.forEach(alert => alert.remove());
+            
+            // Create new alert
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            
+            document.body.appendChild(alertDiv);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
     </script>
     
     <!-- Block for additional JavaScript from child templates -->

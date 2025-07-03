@@ -200,6 +200,24 @@ def init_db():
         )
         ''')
         
+        # Create feedback table if it doesn't exist
+        cursor.execute('''
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'feedback')
+        CREATE TABLE feedback (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            user_id INT,
+            feedback_type NVARCHAR(50) NOT NULL,
+            priority NVARCHAR(20) NOT NULL,
+            subject NVARCHAR(255) NOT NULL,
+            message NVARCHAR(MAX) NOT NULL,
+            contact_email NVARCHAR(255),
+            status NVARCHAR(20) DEFAULT 'pending',
+            created_at DATETIME DEFAULT GETDATE(),
+            updated_at DATETIME DEFAULT GETDATE(),
+            CONSTRAINT FK_feedback_user FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+        ''')
+        
         db.commit()
 
 # Initialize database
@@ -324,6 +342,21 @@ class UserSession:
         tones = cursor.fetchall()
         return [{'name': tone.name, 'description': tone.description} for tone in tones]
 
+    @staticmethod
+    def submit_feedback(user_id, feedback_type, priority, subject, message, contact_email=None):
+        db = get_db()
+        try:
+            cursor = db.cursor()
+            cursor.execute('''
+            INSERT INTO feedback (user_id, feedback_type, priority, subject, message, contact_email)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ''', (user_id, feedback_type, priority, subject, message, contact_email))
+            db.commit()
+            return True
+        except Exception as e:
+            print(f"Error submitting feedback: {str(e)}")
+            return False
+
 class Config:
     ARTICLES_DIR = "articles"
     GENERATED_DIR = "generated"
@@ -336,12 +369,12 @@ class Config:
             'start': 0,  # First paragraph
             'end': 1     # End of first paragraph
         },
-        'plug': {
-            'start': 3,  # Fourth paragraph
-            'end': 4     # End of fourth paragraph
+        'summary': {
+            'start': 1,  # Second paragraph (2-3 lines ending with "read more...")
+            'end': 2     # End of second paragraph
         },
         'disclaimer': {
-            'start': -1,  # Last paragraph
+            'start': -1,  # Last paragraph (disclaimer)
             'end': None   # End of content
         }
     }
@@ -362,69 +395,110 @@ class AzureServices:
             paragraphs = content.split('\n\n')
             preserved_sections = {}
             
-            # Extract Hook
+            print(f"\n=== EXTRACTING SECTIONS ===")
+            print(f"Total paragraphs found: {len(paragraphs)}")
+            
+            # Extract Hook (first paragraph)
             hook_start = Config.SECTION_MARKERS['hook']['start']
             hook_end = Config.SECTION_MARKERS['hook']['end']
             if hook_start < len(paragraphs):
-                preserved_sections['hook'] = '\n\n'.join(paragraphs[hook_start:hook_end])
-                print(f"Extracted Hook: {preserved_sections['hook'][:10]}...")
+                preserved_sections['hook'] = paragraphs[hook_start:hook_end][0] if hook_end - hook_start == 1 else '\n\n'.join(paragraphs[hook_start:hook_end])
+                print(f"✓ Extracted Hook (paragraph 1): {preserved_sections['hook'][:100]}...")
             else:
-                print("Warning: Hook section not found in content")
+                print("✗ Warning: Hook section not found in content")
                 preserved_sections['hook'] = ""
             
-            # Extract Plug
-            plug_start = Config.SECTION_MARKERS['plug']['start']
-            plug_end = Config.SECTION_MARKERS['plug']['end']
-            if plug_start < len(paragraphs):
-                preserved_sections['plug'] = '\n\n'.join(paragraphs[plug_start:plug_end])
-                print(f"Extracted Plug: {preserved_sections['plug'][:10]}...")
+            # Extract Summary (second paragraph - should be 2-3 lines ending with "read more...")
+            summary_start = Config.SECTION_MARKERS['summary']['start']
+            summary_end = Config.SECTION_MARKERS['summary']['end']
+            if summary_start < len(paragraphs):
+                preserved_sections['summary'] = paragraphs[summary_start:summary_end][0] if summary_end - summary_start == 1 else '\n\n'.join(paragraphs[summary_start:summary_end])
+                print(f"✓ Extracted Summary (paragraph 2): {preserved_sections['summary'][:100]}...")
             else:
-                print("Warning: Plug section not found in content")
-                preserved_sections['plug'] = ""
+                print("✗ Warning: Summary section not found in content")
+                preserved_sections['summary'] = ""
             
-            # Extract Disclaimer
+
+            
+            # Extract Disclaimer (last paragraph)
             disclaimer_start = Config.SECTION_MARKERS['disclaimer']['start']
-            disclaimer_end = Config.SECTION_MARKERS['disclaimer']['end']
-            if disclaimer_start == -1 and len(paragraphs) > 0:
-                preserved_sections['disclaimer'] = paragraphs[-1]
-                print(f"Extracted Disclaimer: {preserved_sections['disclaimer'][:10]}...")
+            if len(paragraphs) > 0:
+                preserved_sections['disclaimer'] = paragraphs[disclaimer_start]
+                print(f"✓ Extracted Disclaimer (paragraph {len(paragraphs)}): {preserved_sections['disclaimer'][:100]}...")
             else:
-                print("Warning: Disclaimer section not found in content")
+                print("✗ Warning: Disclaimer section not found in content")
                 preserved_sections['disclaimer'] = ""
+            
+            print("=== SECTION EXTRACTION COMPLETE ===\n")
             
             return preserved_sections
         except Exception as e:
             print(f"Error extracting sections: {str(e)}")
-            return {'hook': "", 'plug': "", 'disclaimer': ""}
+            return {'hook': "", 'summary': "", 'disclaimer': ""}
 
     def _reconstruct_content(self, new_content, preserved_sections):
         """Preserve specific sections exactly as they are in the original content."""
         try:
             paragraphs = new_content.split('\n\n')
             
-            # Replace the sections with their original content exactly as is
-            if Config.SECTION_MARKERS['hook']['start'] == 0 and preserved_sections['hook']:
+            print(f"\n=== RECONSTRUCTING CONTENT ===")
+            print(f"Total paragraphs in new content: {len(paragraphs)}")
+            
+            # Remove any existing disclaimer or service description from the middle of the content
+            # to prevent duplication, but preserve CTA content
+            cleaned_paragraphs = []
+            for i, para in enumerate(paragraphs):
+                # Skip paragraphs that are exact matches of disclaimers or service descriptions
+                # But preserve paragraphs that contain CTA phrases
+                is_duplicate_section = False
+                if preserved_sections['disclaimer'] and preserved_sections['disclaimer'].strip() == para.strip():
+                    is_duplicate_section = True
+                    print(f"⚠️  Removed duplicate disclaimer from position {i+1}")
+
+                
+                if not is_duplicate_section:
+                    cleaned_paragraphs.append(para)
+            
+            paragraphs = cleaned_paragraphs
+            print(f"Paragraphs after cleaning: {len(paragraphs)}")
+            
+            # Place preserved sections in their correct positions
+            # Hook (first paragraph)
+            if preserved_sections['hook'] and len(paragraphs) > 0:
                 paragraphs[0] = preserved_sections['hook']
-                print("Preserved Hook section exactly as is")
+                print("✓ Preserved Hook section at position 1")
             
-            plug_start = Config.SECTION_MARKERS['plug']['start']
-            if plug_start < len(paragraphs) and preserved_sections['plug']:
-                paragraphs[plug_start] = preserved_sections['plug']
-                print("Preserved Plug section exactly as is")
+            # Summary (second paragraph - 2-3 lines ending with "read more...")
+            if preserved_sections['summary'] and len(paragraphs) > 1:
+                paragraphs[1] = preserved_sections['summary']
+                print("✓ Preserved Summary section at position 2")
+            elif preserved_sections['summary'] and len(paragraphs) <= 1:
+                # If there aren't enough paragraphs, add the summary as second paragraph
+                if len(paragraphs) == 0:
+                    paragraphs.append("")  # Add empty first paragraph if needed
+                paragraphs.append(preserved_sections['summary'])
+                print("✓ Added Summary section at position 2")
             
-            if Config.SECTION_MARKERS['disclaimer']['start'] == -1 and preserved_sections['disclaimer']:
-                paragraphs[-1] = preserved_sections['disclaimer']
-                print("Preserved Disclaimer section exactly as is")
+
+            
+            # Disclaimer (last paragraph)
+            if preserved_sections['disclaimer']:
+                # Always add disclaimer at the very end
+                paragraphs.append(preserved_sections['disclaimer'])
+                print("✓ Added Disclaimer section at the very end")
             
             final_content = '\n\n'.join(paragraphs)
             
             # Verify sections are preserved exactly
             if preserved_sections['hook'] and preserved_sections['hook'] not in final_content:
-                print("Warning: Hook section not preserved exactly")
-            if preserved_sections['plug'] and preserved_sections['plug'] not in final_content:
-                print("Warning: Plug section not preserved exactly")
+                print("✗ Warning: Hook section not preserved exactly")
+            if preserved_sections['summary'] and preserved_sections['summary'] not in final_content:
+                print("✗ Warning: Summary section not preserved exactly")
+
             if preserved_sections['disclaimer'] and preserved_sections['disclaimer'] not in final_content:
-                print("Warning: Disclaimer section not preserved exactly")
+                print("✗ Warning: Disclaimer section not preserved exactly")
+            
+            print("=== RECONSTRUCTION COMPLETE ===\n")
             
             return final_content
         except Exception as e:
@@ -436,6 +510,7 @@ class AzureServices:
         validation_prompt = f"""
             You are an expert content validator. Analyze these two articles and provide a detailed validation.
             You MUST respond with a valid JSON object following this EXACT structure, with no additional text:
+            
             {{
                 "components": {{
                     "keywords": {{
@@ -467,7 +542,7 @@ class AzureServices:
                 }},
                 "preserved_sections": {{
                     "hook": true/false,
-                    "plug": true/false,
+                    "summary": true/false,
                     "disclaimer": true/false
                 }},
                 "change_analysis": {{
@@ -571,23 +646,60 @@ class AzureServices:
             print("\nExtracting sections to preserve...")
             preserved_sections = self._extract_sections(original_text)
             
+            # CRITICAL: DO NOT MODIFY THESE SECTIONS {preserved_sections}:
+            # 1. The first paragraph (Hook) - which is this
+            # 2. The fourth paragraph (Plug) - Keep it exactly as is
+            # 3. The last paragraph (Disclaimer) - Keep it exactly as is
+            
+            # CRITICAL: DO NOT REPEAT THESE SECTIONS:
+            # 1. The hook paragraph should appear ONLY ONCE at the beginning
+            # 2. The plug paragraph should appear ONLY ONCE in its original position
+            # 3. The disclaimer paragraph should appear ONLY ONCE at the end
+            # 4. DO NOT include these preserved sections anywhere else in the article
+            # 5. DO NOT create new paragraphs that repeat the same content as the hook, plug, or disclaimer
+
             # Add explicit instructions about preserving sections
+            # CRITICAL: DO NOT REPEAT THESE SECTIONS:
+            # 1. The first paragraph should appear ONLY ONCE at the beginning
+            # 2. The second paragraph should appear ONLY ONCE in its original position
+            # 3. The disclaimer paragraph should appear ONLY ONCE at the end
+            # 4. DO NOT include these preserved sections anywhere else in the article
+            # 5. DO NOT create new paragraphs that repeat the same content as the hook, plug, or disclaimer
+
+
             system_prompt = f"""
-                You are a legal blog post rewriter. There should be At least 30% changes from original. Rewrite the article following these strict guidelines:
+                You are a legal blog post rewriter. There should be At least 40% changes from original. Rewrite the article following these strict guidelines:
                 
                 CRITICAL: DO NOT MODIFY THESE SECTIONS {preserved_sections}:
-                1. The first paragraph (Hook) - Keep it exactly as is
-                2. The fourth paragraph (Plug) - Keep it exactly as is
-                3. The last paragraph (Disclaimer) - Keep it exactly as is
+                1. The first paragraph (Hook): {preserved_sections['hook']}
+                   - This should remain exactly as is and NOT be duplicated anywhere else
                 
-                CRITICAL: DO NOT REPEAT THESE SECTIONS:
-                1. The hook paragraph should appear ONLY ONCE at the beginning
-                2. The plug paragraph should appear ONLY ONCE in its original position
-                3. The disclaimer paragraph should appear ONLY ONCE at the end
-                4. DO NOT include these preserved sections anywhere else in the article
-                5. DO NOT create new paragraphs that repeat the same content as the hook, plug, or disclaimer
+                2. The second paragraph (Summary): {preserved_sections['summary']}
+                   - This should remain exactly as is and NOT be duplicated anywhere else
+                   - This should be 2-3 lines ending with "read more..."
                 
-                These sections must remain unchanged in both content and position, and must not be duplicated anywhere else in the article.
+                3. The last paragraph (Disclaimer): {preserved_sections['disclaimer']}
+                   - This should remain exactly as is and NOT be duplicated anywhere else
+                   - This is the legal disclaimer paragraph
+                
+                EXPECTED ARTICLE STRUCTURE:
+                1. Hook paragraph (preserved)
+                2. Summary paragraph (preserved - 2-3 lines ending with "read more...")
+                3. Main heading/title (starts with #)
+                4. Article content (rewrite this part)
+                5. CTA (call-to-action)
+                6. Disclaimer paragraph (preserved)
+                
+                CRITICAL GENERATION ORDER:
+                - Generate content in this EXACT order: Hook → Summary → Heading → Article Content → CTA → Disclaimer
+                - The main heading/title MUST come immediately after the summary paragraph
+                - Start your generated content with the heading (e.g., "# Understanding Pet Trusts in Texas")
+                - Include the CTA at the end of your content, before the disclaimer
+                - The AI should generate the content in the correct order from the beginning
+                
+                CRITICAL: DO NOT include the disclaimer paragraph anywhere in the middle of the article.
+                The disclaimer should ONLY appear at the very end of the article.
+                Generate the main article content (section 3-5) in the correct order - the preserved sections will be added automatically.
                 
                 SEO REQUIREMENTS:
                 1. Must include these elements:
@@ -597,6 +709,7 @@ class AzureServices:
                    - Lawyer name: {lawyer_name}
                    - City-state of Lawyer: {city}, {state}
                    - Planning session name: {planning_session_name}
+                   - Discovery call link: {discovery_call_link}
                 2. Incorporate naturally - don't just list them
                 
                 TONE REQUIREMENTS:
@@ -605,7 +718,7 @@ class AzureServices:
                 3. Consistency: Maintain this tone throughout the entire article
                 
                 SPECIAL BRANDING REQUIREMENTS:
-                - Avoid transactional language like "investing in" which are not aligned with the Personal Family Lawyer® brand tone
+                - Avoid transactional language like "investing in" which are not aligned with the Personal Family Lawyer brand tone
                 - Instead use phrases like:
                     * "work with us to choose a plan that works to keep your loved ones out of court and out of conflict"
                     * "create a plan that protects what matters most"
@@ -618,23 +731,19 @@ class AzureServices:
                 CONTENT GUIDELINES:
                 DO's:
                 1. Use active voice
-                2. Structure with 5 sections: introduction, 3 subheadings, and conclusion with call-to-action
-                3. Keep length between 1000-1200 words
+                2. Structure with 5 sections: introduction, 3 subheadings
+                3. Keep length between 1000-1200 words and the summary (second paragraph) should'nt be more than 2-3 lines
                 4. Use transition sentences between sections
-                5. Conclusion should be brief (1-2 sentences) with clear call-to-action
-                6. Include 1-2 bulleted lists in the entire article
-                7. Balance paragraphs and lists appropriately
-                8. Write in a {tone} tone
-                9. Include these keywords naturally: {keywords}
-                10. Mention {firm_name} in {location} where relevant
-                11. Firm name is {firm_name} and location is {location}
-                12 Lawyer name is {lawyer_name} and location is {city}, {state}
-                13. The meeting scheduling link is {discovery_call_link}
-                14. The planning session name is {planning_session_name}
-                15. Make sure to include the following dynamic components where ever required:
-                     - hook: {preserved_sections['hook']}
-                     - plug: {preserved_sections['plug']}
-                     - disclaimer: {preserved_sections['disclaimer']}
+                5. Include 1-2 bulleted lists in the entire article
+                6. Balance paragraphs and lists appropriately
+                7. Write in a {tone} tone
+                8. Include these keywords naturally: {keywords}
+                9. Mention {firm_name} in {location} where relevant
+                10. Firm name is {firm_name} and location is {location}
+                11 Lawyer name is {lawyer_name} and location is {city}, {state}
+                12. The meeting scheduling link is {discovery_call_link}
+                13. The planning session name is {planning_session_name}
+                14. Make sure to include the following dynamic components where ever required:
                      - keywords: {keywords}
                      - firm_name: {firm_name}
                      - location: {location}
@@ -643,6 +752,7 @@ class AzureServices:
                      - state: {state}
                      - planning_session_name: {planning_session_name}
                      - discovery_call_link: {discovery_call_link}
+                15. Generate content in this EXACT order: Heading → Article Content → CTA
                 
                 DON'Ts:
                 1. Avoid legal jargon or complex language (keep it high-school level)
@@ -653,17 +763,16 @@ class AzureServices:
                 6. Don't include more than 5 sources
                 7. Don't exceed 1200 words
                 8. Don't use more than 3 lists
-                9. Don't repeat any paragraph meaning no same paragraph should be present
-                10. DO NOT repeat the hook, plug, or disclaimer paragraphs anywhere else in the article
-                11. DO NOT create new content that duplicates the preserved sections
-                12. DO NOT include the preserved sections in the dynamic components list - they should only appear in their original positions
-                
+                9. Don't repeat any paragraph meaning no same paragraph should be present    
+                10. Don't extend the summary which is the second paragraph should'nt be more than 2-3 lines
 
                 CTA REQUIREMENTS:
                 1. MUST use the exact phrase "15-minute Discovery Call" (never "consultation" or "consult")
                 2. Standard format: "Schedule your complimentary 15-minute Discovery Call with {firm_name} today"
                 3. Include a clear call-to-action like "Click here to schedule" or "Book your Discovery Call now"
                 4. Never offer to answer questions or provide consultation during this call
+                5. CRITICAL: After the call-to-action, DO NOT add any additional paragraphs or content
+                6. The article should end immediately after the call-to-action - no extra content
                 
                 Formatting Requirements:
                 # Main Title
@@ -692,6 +801,10 @@ class AzureServices:
             # Preserve the sections exactly as they are
             print("\nPreserving sections exactly as they are...")
             final_content = self._reconstruct_content(rewritten_content, preserved_sections)
+            
+            # Validate and cleanup the structure to ensure exact format
+            print("\nValidating and cleaning article structure...")
+            final_content = self._validate_and_cleanup_structure(final_content, preserved_sections)
             
             # Validate the generated content using GPT
             components = {
@@ -722,6 +835,9 @@ class AzureServices:
             self.conversations[session_id] = [
                 {"role": "system", "content": """
                     You are a legal blog post editor. When the user requests changes:
+                    1. The first paragraph should not be repeating and be the same as the original
+                    2. The second paragraph should not be extending and be the same as the original
+                    3. The last paragraph (disclaimer) should not be repeating and be the same as the original
                     1. Make ONLY the requested changes
                     2. Return the COMPLETE updated blog (not just updated part) in markdown format
                     3. Don't include any commentary or explanations
@@ -752,6 +868,104 @@ class AzureServices:
         
         return ai_response
     
+    def _validate_and_cleanup_structure(self, content, preserved_sections):
+        """Validate and cleanup the article structure to ensure it follows the exact format."""
+        try:
+            print(f"\n=== VALIDATING AND CLEANING ARTICLE STRUCTURE ===")
+            
+            paragraphs = content.split('\n\n')
+            cleaned_paragraphs = []
+            
+            # Step 1: Ensure hook is first
+            if preserved_sections['hook'] and len(paragraphs) > 0:
+                cleaned_paragraphs.append(preserved_sections['hook'])
+                print("✓ Hook placed at position 1")
+            else:
+                print("⚠️  No hook found")
+            
+            # Step 2: Add line break after hook
+            cleaned_paragraphs.append("")
+            print("✓ Added line break after hook")
+            
+            # Step 3: Ensure summary is second (2-3 lines)
+            if preserved_sections['summary']:
+                cleaned_paragraphs.append(preserved_sections['summary'])
+                print("✓ Summary placed at position 3")
+            else:
+                print("⚠️  No summary found")
+            
+            # Step 4: Find and organize content (heading, article content, CTA)
+            cta_found = False
+            heading_found = False
+            content_paragraphs = []
+            
+            for i, para in enumerate(paragraphs):
+                # Skip if this is the hook or summary (already handled)
+                if para.strip() == preserved_sections.get('hook', '').strip():
+                    continue
+                if para.strip() == preserved_sections.get('summary', '').strip():
+                    continue
+                
+                # Check if this paragraph contains CTA
+                cta_phrases = ["Click here to schedule", "Book your Discovery Call", "Schedule your complimentary"]
+                if any(phrase in para for phrase in cta_phrases):
+                    cta_found = True
+                    content_paragraphs.append(para)  # Include the CTA paragraph
+                    print(f"✓ Found CTA at paragraph {i+1}")
+                    break
+                
+                # Check if this is a heading (starts with #)
+                if para.strip().startswith('#'):
+                    if not heading_found:
+                        heading_found = True
+                        print(f"✓ Found heading at paragraph {i+1}: {para.strip()[:50]}...")
+                    content_paragraphs.append(para)
+                else:
+                    # Add all other content paragraphs
+                    content_paragraphs.append(para)
+            
+            # Add all content paragraphs (including heading and main content)
+            cleaned_paragraphs.extend(content_paragraphs)
+            
+            if not heading_found:
+                print("⚠️  No heading found in content")
+            if not cta_found:
+                print("⚠️  No CTA found in content")
+            
+            # Step 5: Add disclaimer at the end (only if it exists)
+            if preserved_sections['disclaimer']:
+                cleaned_paragraphs.append(preserved_sections['disclaimer'])
+                print("✓ Disclaimer placed at the end")
+            else:
+                print("⚠️  No disclaimer found")
+            
+            # Step 6: Add any remaining content after disclaimer (preserve all content)
+            for para in paragraphs:
+                # Skip if this is the hook, summary, or disclaimer (already handled)
+                if para.strip() == preserved_sections.get('hook', '').strip():
+                    continue
+                if para.strip() == preserved_sections.get('summary', '').strip():
+                    continue
+                if para.strip() == preserved_sections.get('disclaimer', '').strip():
+                    continue
+                
+                # Check if this paragraph is already in content_paragraphs
+                if para not in content_paragraphs:
+                    cleaned_paragraphs.append(para)
+                    print(f"✓ Added remaining content: {para.strip()[:50]}...")
+            
+            final_content = '\n\n'.join(cleaned_paragraphs)
+            
+            print(f"=== STRUCTURE VALIDATION COMPLETE ===")
+            print(f"Final structure: Hook → Line Break → Summary → Heading → Content → CTA → Disclaimer → All Remaining Content")
+            print(f"Total paragraphs: {len(cleaned_paragraphs)}")
+            
+            return final_content
+            
+        except Exception as e:
+            print(f"Error in structure validation: {str(e)}")
+            return content
+
 class ImageGenerator:
     def __init__(self):
         self.image_client = AzureOpenAI(
@@ -1221,6 +1435,32 @@ def add_tone():
         })
     
     return jsonify({'success': False, 'error': 'Tone with this name already exists'}), 400
+
+@app.route('/submit_feedback', methods=['POST'])
+def submit_feedback():
+    if 'user' not in session:
+        return jsonify({'success': False, 'message': 'User not authenticated'})
+    
+    try:
+        feedback_type = request.form.get('feedback_type')
+        priority = request.form.get('priority')
+        subject = request.form.get('subject')
+        message = request.form.get('message')
+        contact_email = request.form.get('contact_email')
+        
+        # Validate required fields
+        if not all([feedback_type, priority, subject, message]):
+            return jsonify({'success': False, 'message': 'Please fill in all required fields'})
+        
+        # Submit feedback using UserSession method
+        if UserSession.submit_feedback(session['user']['id'], feedback_type, priority, subject, message, contact_email):
+            return jsonify({'success': True, 'message': 'Feedback submitted successfully'})
+        else:
+            return jsonify({'success': False, 'message': 'An error occurred while submitting feedback'})
+        
+    except Exception as e:
+        print(f"Error submitting feedback: {str(e)}")
+        return jsonify({'success': False, 'message': 'An error occurred while submitting feedback'})
 
 @app.route('/select/<article>', methods=['GET', 'POST'])
 def select_article(article):
