@@ -26,17 +26,6 @@
     .input-icon {
         color: #6c757d;
     }
-    .auth-footer {
-        text-align: center;
-        margin-top: 1.5rem;
-        padding-top: 1rem;
-        border-top: 1px solid #eee;
-    }
-    .default-credentials {
-        font-size: 0.875rem;
-        color: #6c757d;
-        margin-top: 1rem;
-    }
     .btn-auth {
         padding: 0.5rem 1rem;
         font-size: 1rem;
@@ -87,7 +76,7 @@
                         <div class="d-flex justify-content-end mb-3">
                             <a href="{{ url_for('forgot_password') }}" class="text-decoration-none">
                                 <small class="text-muted">
-                                    <i data-feather="help-circle" class="icon-xs me-1"></i>Forgot your password?
+                                    Forgot your password?
                                 </small>
                             </a>
                         </div>
@@ -103,13 +92,6 @@
                         <a href="{{ url_for('register') }}" class="btn btn-outline-secondary">
                             <i data-feather="log-in" class="icon-sm me-1"></i> Don't have an account? Register here
                         </a>
-                    </div>
-
-                    <div class="auth-footer">
-                        <p class="default-credentials">
-                            <i data-feather="info" class="icon-xs me-1"></i>
-                            Default credentials: memberhub@newlawbusinessmodel.com / memberhub123
-                        </p>
                     </div>
                 </div>
             </div>

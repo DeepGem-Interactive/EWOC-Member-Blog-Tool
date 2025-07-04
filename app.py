@@ -1442,15 +1442,17 @@ def submit_feedback():
         return jsonify({'success': False, 'message': 'User not authenticated'})
     
     try:
-        feedback_type = request.form.get('feedback_type')
-        priority = request.form.get('priority')
-        subject = request.form.get('subject')
         message = request.form.get('message')
         contact_email = request.form.get('contact_email')
         
         # Validate required fields
-        if not all([feedback_type, priority, subject, message]):
-            return jsonify({'success': False, 'message': 'Please fill in all required fields'})
+        if not message:
+            return jsonify({'success': False, 'message': 'Please provide a message'})
+        
+        # Set default values for removed fields
+        feedback_type = 'general'
+        priority = 'medium'
+        subject = 'User Feedback'
         
         # Submit feedback using UserSession method
         if UserSession.submit_feedback(session['user']['id'], feedback_type, priority, subject, message, contact_email):

@@ -9,53 +9,22 @@
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
     .profile-header {
-        background-color: #0E2539;
-        color: white;
+        background-color: #ffffff;
+        color: black;
         border-radius: 10px 10px 0 0 !important;
     }
     .form-group {
         margin-bottom: 1.25rem;
     }
-    .keyword-badge {
-        cursor: pointer;
-        transition: all 0.2s;
+    .planning-session-options {
+        margin-top: 0.5rem;
     }
-    .keyword-badge:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .keyword-input-container {
-        position: relative;
-    }
-    .keyword-input-container .btn-sm {
-        position: absolute;
-        right: 5px;
-        top: 50%;
-        transform: translateY(-50%);
-    }
-    .keywords-preview {
-        min-height: 38px;
-        border: 1px solid #ced4da;
-        border-radius: 0.25rem;
-        padding: 0.375rem 0.75rem;
-        background-color: #f8f9fa;
-    }
-    .keyword-tag {
-        display: inline-flex;
-        align-items: center;
-        margin-right: 0.5rem;
+    .planning-session-option {
         margin-bottom: 0.5rem;
     }
-    .keyword-tag-remove {
-        cursor: pointer;
-        margin-left: 0.25rem;
-    }
-    .keyword-input-group {
-        display: flex;
-        gap: 0.5rem;
-    }
-    .keyword-input-group input {
-        flex-grow: 1;
+    .other-planning-session {
+        margin-top: 0.5rem;
+        display: none;
     }
 </style>
 {% endblock %}
@@ -73,7 +42,7 @@
                     <div class="alert alert-danger">{{ error }}</div>
                     {% endif %}
                     
-                    <form method="POST">
+                    <form method="POST" id="profile-form">
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-group">
@@ -100,44 +69,81 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
+                                    <label for="location" class="form-label">City/Region</label>
+                                    <input type="text" class="form-control" id="location" name="location" 
+                                           value="{{ user.location }}" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
                                     <label for="state" class="form-label">State</label>
                                     <input type="text" class="form-control" id="state" name="state" 
                                            value="{{ user.state }}" required>
                                 </div>
                             </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="address" class="form-label">Address (Optional)</label>
+                                    <input type="text" class="form-control" id="address" name="address" 
+                                           value="{{ user.address }}" 
+                                           data-bs-toggle="tooltip" 
+                                           data-bs-placement="right" 
+                                           data-bs-html="true"
+                                           title="<strong>Examples:</strong><br>Southern California<br>Tri-state area">
+                                </div>
+                            </div>
                         </div>
 
                         <div class="form-group">
-                            <label for="location" class="form-label">City</label>
-                            <input type="text" class="form-control" id="location" name="location" 
-                                   value="{{ user.location }}" required>
+                            <label class="form-label">What is your planning session called?</label>
+                            <div class="planning-session-options">
+                                <div class="planning-session-option">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="planning_session" 
+                                               id="planning_session_legacy" value="Life & Legacy Planning Session" 
+                                               {% if user.planning_session == 'Life & Legacy Planning Session' %}checked{% endif %} required>
+                                        <label class="form-check-label" for="planning_session_legacy">
+                                            Life & Legacy
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="planning-session-option">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="planning_session" 
+                                               id="planning_session_wealth" value="Family Wealth Planning Session"
+                                               {% if user.planning_session == 'Family Wealth Planning Session' %}checked{% endif %}>
+                                        <label class="form-check-label" for="planning_session_wealth">
+                                            Family Wealth
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="planning-session-option">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="planning_session" 
+                                               id="planning_session_other" value="other"
+                                               {% if user.planning_session and user.planning_session not in ['Life & Legacy Planning Session', 'Family Wealth Planning Session'] %}checked{% endif %}>
+                                        <label class="form-check-label" for="planning_session_other">
+                                            Other
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="other-planning-session" id="other_planning_session" 
+                                     {% if user.planning_session and user.planning_session not in ['Life & Legacy Planning Session', 'Family Wealth Planning Session'] %}style="display: block;"{% endif %}>
+                                    <input type="text" class="form-control mt-2" id="other_planning_session_input" 
+                                           name="other_planning_session" placeholder="Please specify"
+                                           value="{% if user.planning_session and user.planning_session not in ['Life & Legacy Planning Session', 'Family Wealth Planning Session'] %}{{ user.planning_session }}{% endif %}">
+                                </div>
+                            </div>
                         </div>
 
-                        <!-- Keywords Section -->
                         <div class="form-group">
-                            <label class="form-label">Practice Area Keywords</label>
-                            <div class="keyword-input-group mb-2">
-                                <input type="text" class="form-control" id="keyword-input" 
-                                       placeholder="Type a keyword">
-                                <button type="button" class="btn btn-primary" id="add-keyword-btn">
-                                    <i data-feather="plus" class="icon-xs"></i> Add
-                                </button>
-                            </div>
-                            <input type="hidden" name="keywords" id="keywords-hidden" value="{{ user.keywords }}">
-                            <div class="keywords-preview d-flex flex-wrap" id="keywords-preview">
-                                {% if user.keywords %}
-                                    {% for keyword in user.keywords.split(',') %}
-                                        {% if keyword.strip() %}
-                                        <div class="keyword-tag badge bg-primary">
-                                            {{ keyword.strip() }}
-                                            <span class="keyword-tag-remove" data-keyword="{{ keyword.strip() }}">
-                                                <i data-feather="x" class="icon-xs"></i>
-                                            </span>
-                                        </div>
-                                        {% endif %}
-                                    {% endfor %}
-                                {% endif %}
-                            </div>
+                            <label for="discovery_call_link" class="form-label">15-Minute Discovery Call Booking Link</label>
+                            <input type="url" class="form-control" id="discovery_call_link" name="discovery_call_link" 
+                                   value="{{ user.discovery_call_link }}" placeholder="https://..." required>
+                            <small class="text-muted">Enter the URL where clients can book their 15-minute discovery call</small>
                         </div>
 
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
@@ -161,73 +167,38 @@
     document.addEventListener('DOMContentLoaded', function() {
         feather.replace();
         
-        const keywordInput = document.getElementById('keyword-input');
-        const addKeywordBtn = document.getElementById('add-keyword-btn');
-        const keywordsPreview = document.getElementById('keywords-preview');
-        const keywordsHidden = document.getElementById('keywords-hidden');
-        const form = document.getElementById('profile-form');
+        // Initialize tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
         
-        // Initialize with existing keywords
-        let keywords = "{{ user.keywords }}".split(',')
-            .map(k => k.trim())
-            .filter(k => k);
+        const form = document.getElementById('profile-form');
+        const otherPlanningSession = document.getElementById('other_planning_session');
+        const otherPlanningSessionInput = document.getElementById('other_planning_session_input');
+        const planningSessionOther = document.getElementById('planning_session_other');
 
-        // Update the display and hidden field
-        function updateKeywords() {
-            keywordsPreview.innerHTML = '';
-            keywords.forEach(keyword => {
-                const tag = document.createElement('div');
-                tag.className = 'keyword-tag badge bg-primary';
-                tag.innerHTML = `
-                    ${keyword}
-                    <span class="keyword-tag-remove" data-keyword="${keyword}">
-                        <i data-feather="x" class="icon-xs"></i>
-                    </span>
-                `;
-                keywordsPreview.appendChild(tag);
+        // Show/hide other planning session input
+        document.querySelectorAll('input[name="planning_session"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.value === 'other') {
+                    otherPlanningSession.style.display = 'block';
+                    otherPlanningSessionInput.required = true;
+                } else {
+                    otherPlanningSession.style.display = 'none';
+                    otherPlanningSessionInput.required = false;
+                    otherPlanningSessionInput.value = '';
+                }
             });
-            keywordsHidden.value = keywords.join(',');
-            feather.replace();
-        }
+        });
 
-        // Add a keyword
-        function addKeyword() {
-            const keyword = keywordInput.value.trim();
-            if (keyword && !keywords.includes(keyword)) {
-                keywords.push(keyword);
-                updateKeywords();
-                keywordInput.value = '';
-                keywordInput.focus();
-            }
-        }
-
-        // Remove a keyword
-        function removeKeyword(keyword) {
-            keywords = keywords.filter(k => k !== keyword);
-            updateKeywords();
-        }
-
-        // Add keyword button click
-        addKeywordBtn.addEventListener('click', addKeyword);
-
-        // Add keyword on Enter key
-        keywordInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
+        // Form submission handling
+        form.addEventListener('submit', function(e) {
+            if (planningSessionOther.checked && !otherPlanningSessionInput.value.trim()) {
                 e.preventDefault();
-                addKeyword();
+                alert('Please specify the other planning session type');
             }
         });
-
-        // Remove keyword when x is clicked
-        keywordsPreview.addEventListener('click', function(e) {
-            if (e.target.closest('.keyword-tag-remove')) {
-                const keyword = e.target.closest('.keyword-tag-remove').dataset.keyword;
-                removeKeyword(keyword);
-            }
-        });
-
-        // Initialize display
-        updateKeywords();
     });
 </script>
 {% endblock %}

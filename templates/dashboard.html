@@ -346,11 +346,11 @@
             
             <!-- Article card -->
             <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card h-100 article-card"
+                <div class="card h-100 article-card d-flex flex-column"
                     data-series="{{ meta.series if meta.series else 'none' }}"
                     data-series-index="{{ meta.series_order if meta.series_order else 0 }}"
                     data-publish-date="{{ meta.publish_date if meta.publish_date else '' }}">
-                    <div class="card-body">
+                    <div class="card-body d-flex flex-column">
                         <!-- Article header with preview button -->
                         <div class="article-header">
                         <div class="article-icon">
@@ -372,6 +372,9 @@
                             <p class="article-description">{{ meta.description }}</p>
                         {% endif %}
                         
+                        <!-- Spacer to push buttons to bottom -->
+                        <div class="flex-grow-1"></div>
+                        
                         <!-- Article selection form -->
                         <form method="POST" action="{{ url_for('select_article', article=article) }}" class="mb-3 article-form">
                             <input type="hidden" name="firm" value="{{ user.firm }}">
@@ -390,12 +393,9 @@
                         <!-- Article details preview -->
                         <div class="mt-3">
                             <div class="d-flex justify-content-between align-items-center mb-3">
-                                <button class="btn btn-link text-decoration-none p-0 d-flex align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#userInfoCollapse{{ article_index }}" aria-expanded="false" aria-controls="userInfoCollapse{{ article_index }}">
-                                    <i data-feather="chevron-right" class="icon-sm me-2 collapse-icon"></i>
+                                <button class="btn btn-link text-decoration-none p-0 d-flex align-items-center edit-info-btn" type="button">
+                                    <i data-feather="edit" class="icon-sm me-2"></i>
                                     <h3 class="h6 mb-0">Edit Your Firm's Info</h3>
-                                </button>
-                                <button type="button" class="btn btn-sm btn-light border edit-info-btn">
-                                    <i data-feather="edit-2" class="icon-sm"></i>
                                 </button>
                             </div>
                             <div class="collapse" id="userInfoCollapse{{ article_index }}">
@@ -545,15 +545,7 @@
             });
         });
 
-        // Handle collapse icon rotation
-        document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(button => {
-            button.addEventListener('click', function() {
-                const icon = this.querySelector('.collapse-icon');
-                if (icon) {
-                    icon.style.transform = this.getAttribute('aria-expanded') === 'true' ? 'rotate(90deg)' : 'rotate(0deg)';
-                }
-            });
-        });
+
 
         // Edit information functionality
         document.querySelectorAll('.edit-info-btn').forEach(button => {

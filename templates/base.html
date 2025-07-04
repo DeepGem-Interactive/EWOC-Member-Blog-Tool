@@ -102,6 +102,52 @@
             width: auto;
             margin-right: 10px;
         }
+        
+        /* Profile dropdown styling */
+        .dropdown-toggle::after {
+            margin-left: 0.5em;
+        }
+        
+        .dropdown-menu {
+            border: none;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            border-radius: 0.5rem;
+            padding: 0.5rem 0;
+        }
+        
+        .dropdown-item {
+            padding: 0.5rem 1rem;
+            color: #6c757d;
+            transition: all 0.2s ease;
+        }
+        
+        .dropdown-item:hover {
+            background-color: #f8f9fa;
+            color: #0d6efd;
+        }
+        
+        .dropdown-item i {
+            width: 16px;
+            height: 16px;
+        }
+        
+        .dropdown-divider {
+            margin: 0.5rem 0;
+            border-color: #e9ecef;
+        }
+        
+        /* Navbar button styling */
+        .navbar .btn-link {
+            text-decoration: none;
+            color: #6c757d;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: all 0.2s ease;
+        }
+        
+        .navbar .btn-link:hover {
+            color: #0d6efd;
+        }
     </style>
     
     <!-- Block for additional CSS from child templates -->
@@ -121,15 +167,30 @@
             {% if session.get('user') %}
             <div class="navbar-nav ms-auto">
                 <div class="d-flex align-items-center">
-                    <a class="nav-item nav-link" href="{{ url_for('profile') }}">
-                        <i data-feather="user" class="icon-sm me-1"></i>{{ session.get('user').lawyer_name }}
-                    </a>
                     <button class="nav-item nav-link btn btn-link" data-bs-toggle="modal" data-bs-target="#feedbackModal">
                         <i data-feather="message-circle" class="icon-sm me-1"></i>Feedback
                     </button>
-                    <a class="nav-item nav-link" href="{{ url_for('logout') }}">
-                        <i data-feather="log-out" class="icon-sm me-1"></i>Logout
-                    </a>
+                    
+                    <!-- Profile Dropdown -->
+                    <div class="dropdown ms-3">
+                        <button class="btn btn-link nav-link dropdown-toggle d-flex align-items-center" type="button" id="profileDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i data-feather="user" class="icon-sm me-1"></i>
+                            <span>{{ session.get('user').lawyer_name }}</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="profileDropdown">
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('profile') }}">
+                                    <i data-feather="user" class="icon-sm me-2"></i>My Profile
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('logout') }}">
+                                    <i data-feather="log-out" class="icon-sm me-2"></i>Logout
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
             {% endif %}
@@ -153,32 +214,6 @@
                 </div>
                 <form id="feedbackForm" method="POST" action="{{ url_for('submit_feedback') }}">
                     <div class="modal-body">
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="feedbackType" class="form-label">Feedback Type</label>
-                                <select class="form-select" id="feedbackType" name="feedback_type" required>
-                                    <option value="">Select feedback type...</option>
-                                    <option value="bug">Bug Report</option>
-                                    <option value="feature">Feature Request</option>
-                                    <option value="improvement">Improvement Suggestion</option>
-                                    <option value="general">General Feedback</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="feedbackPriority" class="form-label">Priority</label>
-                                <select class="form-select" id="feedbackPriority" name="priority">
-                                    <option value="low">Low</option>
-                                    <option value="medium" selected>Medium</option>
-                                    <option value="high">High</option>
-                                    <option value="urgent">Urgent</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="feedbackSubject" class="form-label">Subject</label>
-                            <input type="text" class="form-control" id="feedbackSubject" name="subject" 
-                                   placeholder="Brief description of your feedback" required>
-                        </div>
                         <div class="mb-3">
                             <label for="feedbackMessage" class="form-label">Message</label>
                             <textarea class="form-control" id="feedbackMessage" name="message" rows="5" 
