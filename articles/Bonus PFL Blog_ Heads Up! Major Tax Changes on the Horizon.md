@@ -1,8 +1,3 @@
-*Weekly blog preview/summary you can use on your main blog page and Featured Article section of your email newsletter:*
-
-The House recently passed comprehensive tax legislation that could reshape your financial landscape. Here’s what to know. Read more...
-
-*2025.06.06*
 # Heads Up! Major Tax Changes on the Horizon
 The House recently passed what many are calling  that could reshape the tax landscape for individuals and businesses. While it still needs to pass the Senate, and the President sign it into law, understanding these potential changes now gives you time to prepare and potentially benefit from new opportunities.
 

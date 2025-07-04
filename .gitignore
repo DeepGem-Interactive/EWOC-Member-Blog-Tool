@@ -48,4 +48,8 @@ articles/markdown/
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.db 
+Thumbs.db
+
+# Flask session files
+flask_session/
+*.session 

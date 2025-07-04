@@ -668,121 +668,57 @@ class AzureServices:
 
 
             system_prompt = f"""
-                You are a legal blog post rewriter. There should be At least 40% changes from original. Rewrite the article following these strict guidelines:
+                You are a legal blog post rewriter. Generate ONLY the main article content (heading + body + CTA) with at least 40% changes from the original.
                 
-                CRITICAL: DO NOT MODIFY THESE SECTIONS {preserved_sections}:
-                1. The first paragraph (Hook): {preserved_sections['hook']}
-                   - This should remain exactly as is and NOT be duplicated anywhere else
+                TEMPLATE STRUCTURE (DO NOT INCLUDE THESE SECTIONS - THEY WILL BE ADDED AUTOMATICALLY):
+                - Hook: {preserved_sections['hook']}
+                - Summary: {preserved_sections['summary']}
+                - Date: Will be added automatically
+                - Disclaimer: {preserved_sections['disclaimer']}
                 
-                2. The second paragraph (Summary): {preserved_sections['summary']}
-                   - This should remain exactly as is and NOT be duplicated anywhere else
-                   - This should be 2-3 lines ending with "read more..."
+                YOUR TASK: Generate ONLY the main content that goes in the template:
+                1. Main heading (starts with "# ")
+                2. Article body with subheadings (## )
+                3. Call-to-action (CTA)
                 
-                3. The last paragraph (Disclaimer): {preserved_sections['disclaimer']}
-                   - This should remain exactly as is and NOT be duplicated anywhere else
-                   - This is the legal disclaimer paragraph
+                The content will be inserted into a template that already includes:
+                - Summary section
+                - Date section  
+                - Disclaimer section
                 
-                EXPECTED ARTICLE STRUCTURE:
-                1. Hook paragraph (preserved)
-                2. Summary paragraph (preserved - 2-3 lines ending with "read more...")
-                3. Main heading/title (starts with #)
-                4. Article content (rewrite this part)
-                5. CTA (call-to-action)
-                6. Disclaimer paragraph (preserved)
+                CRITICAL REQUIREMENTS:
+                1. Start your content with the main heading: "# [Title]"
+                2. Use proper markdown formatting throughout
+                3. Include 3-4 subheadings with "## "
+                4. End with a CTA paragraph
+                5. DO NOT include hook, summary, date, or disclaimer
+                6. DO NOT include any preview text or introductory paragraphs
+                7. DO NOT include any dates
+                8. Ensure at least 40% changes from original
                 
-                CRITICAL GENERATION ORDER:
-                - Generate content in this EXACT order: Hook → Summary → Heading → Article Content → CTA → Disclaimer
-                - The main heading/title MUST come immediately after the summary paragraph
-                - Start your generated content with the heading (e.g., "# Understanding Pet Trusts in Texas")
-                - Include the CTA at the end of your content, before the disclaimer
-                - The AI should generate the content in the correct order from the beginning
-                
-                CRITICAL: DO NOT include the disclaimer paragraph anywhere in the middle of the article.
-                The disclaimer should ONLY appear at the very end of the article.
-                Generate the main article content (section 3-5) in the correct order - the preserved sections will be added automatically.
+                FORMATTING REQUIREMENTS:
+                - Main heading: "# [Title]"
+                - Subheadings: "## [Subheading]"
+                - Bold text: **text**
+                - Italic text: *text*
+                - Bullet points: - or *
+                - Proper line breaks between paragraphs
                 
                 SEO REQUIREMENTS:
-                1. Must include these elements:
-                   - Primary keywords: {keywords}
-                   - Firm name: {firm_name}
-                   - City-state of firm: {location}
-                   - Lawyer name: {lawyer_name}
-                   - City-state of Lawyer: {city}, {state}
-                   - Planning session name: {planning_session_name}
-                   - Discovery call link: {discovery_call_link}
-                2. Incorporate naturally - don't just list them
+                - Include keywords: {keywords}
+                - Mention firm: {firm_name} in {location}
+                - Mention lawyer: {lawyer_name} in {city}, {state}
+                - Include planning session: {planning_session_name}
+                - Include discovery call link: {discovery_call_link}
                 
-                TONE REQUIREMENTS:
-                1. Primary Tone: {tone}
-                2. Tone Description: {tone_description}
-                3. Consistency: Maintain this tone throughout the entire article
+                TONE: {tone} - {tone_description}
                 
-                SPECIAL BRANDING REQUIREMENTS:
-                - Avoid transactional language like "investing in" which are not aligned with the Personal Family Lawyer brand tone
-                - Instead use phrases like:
-                    * "work with us to choose a plan that works to keep your loved ones out of court and out of conflict"
-                    * "create a plan that protects what matters most"
-                    * "develop a comprehensive approach to safeguarding your family's future"
-                    * "put a plan in place that ensures your wishes are honored"
-                    * "create a plan that grows with your family and ensures lasting peace of mind"
-                - Emphasize the ongoing relationship and family protection aspects rather than transactional terms
-                - Use the term "{planning_session_name}" when referencing to planning sessions.
-
-                CONTENT GUIDELINES:
-                DO's:
-                1. Use active voice
-                2. Structure with 5 sections: introduction, 3 subheadings
-                3. Keep length between 1000-1200 words and the summary (second paragraph) should'nt be more than 2-3 lines
-                4. Use transition sentences between sections
-                5. Include 1-2 bulleted lists in the entire article
-                6. Balance paragraphs and lists appropriately
-                7. Write in a {tone} tone
-                8. Include these keywords naturally: {keywords}
-                9. Mention {firm_name} in {location} where relevant
-                10. Firm name is {firm_name} and location is {location}
-                11 Lawyer name is {lawyer_name} and location is {city}, {state}
-                12. The meeting scheduling link is {discovery_call_link}
-                13. The planning session name is {planning_session_name}
-                14. Make sure to include the following dynamic components where ever required:
-                     - keywords: {keywords}
-                     - firm_name: {firm_name}
-                     - location: {location}
-                     - lawyer_name: {lawyer_name}
-                     - city: {city}
-                     - state: {state}
-                     - planning_session_name: {planning_session_name}
-                     - discovery_call_link: {discovery_call_link}
-                15. Generate content in this EXACT order: Heading → Article Content → CTA
-                
-                DON'Ts:
-                1. Avoid legal jargon or complex language (keep it high-school level)
-                2. No passive voice
-                3. Don't use lists without context
-                4. Limit metaphors
-                5. Don't make conclusion too long
-                6. Don't include more than 5 sources
-                7. Don't exceed 1200 words
-                8. Don't use more than 3 lists
-                9. Don't repeat any paragraph meaning no same paragraph should be present    
-                10. Don't extend the summary which is the second paragraph should'nt be more than 2-3 lines
-
                 CTA REQUIREMENTS:
-                1. MUST use the exact phrase "15-minute Discovery Call" (never "consultation" or "consult")
-                2. Standard format: "Schedule your complimentary 15-minute Discovery Call with {firm_name} today"
-                3. Include a clear call-to-action like "Click here to schedule" or "Book your Discovery Call now"
-                4. Never offer to answer questions or provide consultation during this call
-                5. CRITICAL: After the call-to-action, DO NOT add any additional paragraphs or content
-                6. The article should end immediately after the call-to-action - no extra content
+                - Use "15-minute Discovery Call"
+                - Include scheduling link: {discovery_call_link}
+                - End content immediately after CTA
                 
-                Formatting Requirements:
-                # Main Title
-                ## Subheading 1
-                ### Sub-subheading (if needed)
-                **Bold important terms**
-                - Bullet points when appropriate
-                [Link text](URL) for references
-                
-                The article must be valuable, engaging, and optimized for both readers and search engines.
+                Generate ONLY the main content (heading + body + CTA). The system will add hook, summary, date, and disclaimer automatically.
             """
             
             print("\nGenerating rewritten content...")
@@ -798,13 +734,13 @@ class AzureServices:
             # Get the rewritten content
             rewritten_content = response.choices[0].message.content
             
-            # Preserve the sections exactly as they are
-            print("\nPreserving sections exactly as they are...")
-            final_content = self._reconstruct_content(rewritten_content, preserved_sections)
+            # Generate summary (2-3 sentences ending with "Read more...")
+            print("\nGenerating summary...")
+            summary = self._generate_summary(rewritten_content, preserved_sections['hook'])
             
-            # Validate and cleanup the structure to ensure exact format
-            print("\nValidating and cleaning article structure...")
-            final_content = self._validate_and_cleanup_structure(final_content, preserved_sections)
+            # Final assembly with template
+            print("\nAssembling final article with template...")
+            final_content = self._assemble_final_article(preserved_sections['hook'], summary, rewritten_content, preserved_sections['disclaimer'])
             
             # Validate the generated content using GPT
             components = {
@@ -877,7 +813,7 @@ class AzureServices:
             cleaned_paragraphs = []
             
             # Step 1: Ensure hook is first
-            if preserved_sections['hook'] and len(paragraphs) > 0:
+            if preserved_sections['hook']:
                 cleaned_paragraphs.append(preserved_sections['hook'])
                 print("✓ Hook placed at position 1")
             else:
@@ -894,7 +830,20 @@ class AzureServices:
             else:
                 print("⚠️  No summary found")
             
-            # Step 4: Find and organize content (heading, article content, CTA)
+            # Step 4: Add line break after summary
+            cleaned_paragraphs.append("")
+            print("✓ Added line break after summary")
+            
+            # Step 5: Add date
+            current_date = datetime.now().strftime("%B %d, %Y")
+            cleaned_paragraphs.append(f"**Date: {current_date}**")
+            print("✓ Added date")
+            
+            # Step 6: Add line break after date
+            cleaned_paragraphs.append("")
+            print("✓ Added line break after date")
+            
+            # Step 7: Find and organize content (heading, article content, CTA)
             cta_found = False
             heading_found = False
             content_paragraphs = []
@@ -904,6 +853,20 @@ class AzureServices:
                 if para.strip() == preserved_sections.get('hook', '').strip():
                     continue
                 if para.strip() == preserved_sections.get('summary', '').strip():
+                    continue
+                
+                # Skip any paragraphs that look like they might be hook or summary
+                if any(phrase in para.lower() for phrase in ['weekly blog preview', 'read more', 'summary', 'featured article section']):
+                    continue
+                
+                # Skip any paragraphs that are just the hook or summary content
+                if para.strip() == preserved_sections.get('hook', '').strip():
+                    continue
+                if para.strip() == preserved_sections.get('summary', '').strip():
+                    continue
+                
+                # Skip any date paragraphs (we'll add our own date)
+                if any(phrase in para.lower() for phrase in ['date:', '**date:', '2025.', '2024.', '2023.']):
                     continue
                 
                 # Check if this paragraph contains CTA
@@ -932,38 +895,278 @@ class AzureServices:
             if not cta_found:
                 print("⚠️  No CTA found in content")
             
-            # Step 5: Add disclaimer at the end (only if it exists)
+            # Step 8: Add disclaimer at the end (only if it exists)
             if preserved_sections['disclaimer']:
                 cleaned_paragraphs.append(preserved_sections['disclaimer'])
                 print("✓ Disclaimer placed at the end")
             else:
                 print("⚠️  No disclaimer found")
             
-            # Step 6: Add any remaining content after disclaimer (preserve all content)
-            for para in paragraphs:
-                # Skip if this is the hook, summary, or disclaimer (already handled)
-                if para.strip() == preserved_sections.get('hook', '').strip():
-                    continue
-                if para.strip() == preserved_sections.get('summary', '').strip():
-                    continue
-                if para.strip() == preserved_sections.get('disclaimer', '').strip():
-                    continue
-                
-                # Check if this paragraph is already in content_paragraphs
-                if para not in content_paragraphs:
-                    cleaned_paragraphs.append(para)
-                    print(f"✓ Added remaining content: {para.strip()[:50]}...")
+            # Step 9: DROP EVERYTHING AFTER THE DISCLAIMER
+            # The disclaimer should be the final paragraph - no additional content after it
+            print("✓ Dropped all content after disclaimer - disclaimer is the final paragraph")
             
-            final_content = '\n\n'.join(cleaned_paragraphs)
+            # Clean up any empty paragraphs and ensure proper spacing
+            final_paragraphs = []
+            for para in cleaned_paragraphs:
+                if para.strip():  # Only add non-empty paragraphs
+                    final_paragraphs.append(para)
+                elif final_paragraphs and final_paragraphs[-1].strip():  # Add empty line only if previous paragraph wasn't empty
+                    final_paragraphs.append("")
+            
+            final_content = '\n\n'.join(final_paragraphs)
             
             print(f"=== STRUCTURE VALIDATION COMPLETE ===")
-            print(f"Final structure: Hook → Line Break → Summary → Heading → Content → CTA → Disclaimer → All Remaining Content")
-            print(f"Total paragraphs: {len(cleaned_paragraphs)}")
+            print(f"Final structure: Hook → Line Break → Summary → Line Break → Date → Line Break → Heading → Content → CTA → Disclaimer")
+            print(f"Total paragraphs: {len(final_paragraphs)}")
             
             return final_content
             
         except Exception as e:
             print(f"Error in structure validation: {str(e)}")
+            return content
+
+    def _generate_summary(self, article_content, hook):
+        """Generate a 2-3 sentence summary ending with 'Read more...'"""
+        try:
+            print(f"\n=== GENERATING SUMMARY ===")
+            
+            summary_prompt = f"""
+                Generate a 2-3 sentence summary of this article that:
+                1. Is engaging and captures the main point
+                2. Ends with "Read more..."
+                3. Is different from the hook paragraph
+                4. Provides a brief overview of what the article covers
+                5. Is written in a professional tone
+                
+                Hook paragraph: {hook}
+                
+                Article content: {article_content[:1000]}
+                
+                Generate ONLY the summary (2-3 sentences ending with "Read more..."). Do not include any other text.
+            """
+            
+            response = self.text_client.chat.completions.create(
+                model=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
+                messages=[
+                    {"role": "system", "content": "You are a summary generation expert. Always return concise, engaging summaries."},
+                    {"role": "user", "content": summary_prompt}
+                ],
+                temperature=0.7,
+            )
+            
+            summary = response.choices[0].message.content.strip()
+            
+            # Ensure it ends with "Read more..."
+            if not summary.endswith("Read more..."):
+                summary = summary.rstrip('.') + ". Read more..."
+            
+            print(f"✓ Generated summary: {summary[:100]}...")
+            print(f"=== SUMMARY GENERATION COMPLETE ===\n")
+            
+            return summary
+            
+        except Exception as e:
+            print(f"Error generating summary: {str(e)}")
+            # Fallback summary
+            return "This article explores important considerations for protecting your family's future. Read more..."
+
+    def _clean_article_content(self, article_content):
+        """Clean and filter article content to remove unwanted elements"""
+        try:
+            print(f"\n=== CLEANING ARTICLE CONTENT ===")
+            
+            if not article_content:
+                return ""
+            
+            # Split into lines for processing
+            lines = article_content.split('\n')
+            cleaned_lines = []
+            
+            # Filter out unwanted content
+            skip_until_heading = True
+            
+            for line in lines:
+                line = line.strip()
+                
+                # Skip empty lines
+                if not line:
+                    continue
+                
+                # Skip preview/summary text
+                if any(phrase in line.lower() for phrase in [
+                    'weekly blog preview',
+                    'summary you can use',
+                    'featured article section',
+                    'email newsletter',
+                    'preview/summary'
+                ]):
+                    print(f"✓ Skipped preview text: {line[:50]}...")
+                    continue
+                
+                # Skip any date lines (we'll add our own)
+                if any(phrase in line.lower() for phrase in [
+                    'date:', '**date:', '2025.', '2024.', '2023.'
+                ]):
+                    print(f"✓ Skipped date line: {line[:50]}...")
+                    continue
+                
+                # Skip hook and summary content if they appear in the middle
+                if 'read more...' in line.lower() and len(line) < 200:
+                    print(f"✓ Skipped duplicate summary: {line[:50]}...")
+                    continue
+                
+                # Look for the main heading (should start with #)
+                if line.startswith('#'):
+                    skip_until_heading = False
+                    print(f"✓ Found heading: {line[:50]}...")
+                elif skip_until_heading and (
+                    # Look for title-like content (longer lines that seem like titles)
+                    (len(line) > 20 and len(line) < 100 and 
+                     any(word in line.lower() for word in ['mail carrier', 'pet', 'trust', 'planning', 'legacy', 'estate', 'understanding', 'how', 'why', 'what', 'when', 'where', 'guide', 'complete', 'essential', 'important', 'protect', 'secure', 'plan', 'future', 'family', 'legal', 'law', 'attorney', 'lawyer']) and
+                     not any(phrase in line.lower() for phrase in ['read more', 'summary', 'preview', 'date:', '**date:'])
+                    )
+                ):
+                    skip_until_heading = False
+                    # Ensure proper heading format
+                    line = f"# {line}"
+                    print(f"✓ Found heading: {line[:50]}...")
+                
+                # Only add lines after we've found the heading
+                if not skip_until_heading:
+                    cleaned_lines.append(line)
+            
+            # Join lines back together with proper spacing
+            cleaned_content = '\n\n'.join(cleaned_lines)
+            
+            print(f"✓ Content cleaned successfully")
+            print(f"=== CONTENT CLEANING COMPLETE ===\n")
+            
+            return cleaned_content
+            
+        except Exception as e:
+            print(f"Error cleaning article content: {str(e)}")
+            return article_content
+
+    def _assemble_final_article(self, hook, summary, article_content, disclaimer):
+        """Assemble the final article using external template file"""
+        try:
+            print(f"\n=== ASSEMBLING FINAL ARTICLE WITH EXTERNAL TEMPLATE ===")
+            
+            # Get current date
+            current_date = datetime.now().strftime("%B %d, %Y")
+            
+            # Clean and filter the article content to remove any unwanted elements
+            cleaned_content = self._clean_article_content(article_content)
+            
+            # Read the external template file
+            template_path = os.path.join(Config.ARTICLES_DIR, 'template.md')
+            try:
+                with open(template_path, 'r', encoding='utf-8') as f:
+                    template_content = f.read()
+                print("✓ External template loaded successfully")
+            except FileNotFoundError:
+                print("⚠️  Template file not found, using fallback template")
+                template_content = """Weekly blog preview/summary you can use on your main blog page and Featured Article section of your email newsletter:
+
+{summary of the article}
+
+**Date: {current_date}**
+{newly generated Title with proper markdown formatting}
+
+{newly generated content with proper markdown formatting}
+
+*###### This article is a service of [ name ], a Personal Family Lawyer® Firm. We don't just draft documents; we ensure you make informed and empowered decisions about life and death, for yourself and the people you love. That's why we offer a Life & Legacy Planning® Session, during which you will get more financially organized than you've ever been before and make all the best choices for the people you love. You can begin by calling our office today to schedule a Life & Legacy Planning Session.*
+
+The content is sourced from Personal Family Lawyer® for use by Personal Family Lawyer firms, a source believed to be providing accurate information. This material was created for educational and informational purposes only and is not intended as ERISA, tax, legal, or investment advice. If you are seeking legal advice specific to your needs, such advice services must be obtained on your own separate from this educational material."""
+            
+            # Replace placeholders in the template
+            final_content = template_content.replace('{summary of the article}', summary.strip() if summary else '')
+            final_content = final_content.replace('{current_date}', current_date)
+            final_content = final_content.replace('{newly generated Title with proper markdown formatting}', '')
+            final_content = final_content.replace('{newly generated content with proper markdown formatting}', cleaned_content if cleaned_content else '')
+            
+            # Remove the preview text line if no hook is provided
+            if not hook or not hook.strip():
+                lines = final_content.split('\n')
+                # Remove the first line (preview text) and any empty lines after it
+                if lines and 'Weekly blog preview/summary' in lines[0]:
+                    lines = lines[1:]  # Remove first line
+                    # Remove empty lines after the removed line
+                    while lines and not lines[0].strip():
+                        lines = lines[1:]
+                final_content = '\n'.join(lines)
+            
+            print(f"✓ Article assembled using external template")
+            print(f"=== EXTERNAL TEMPLATE ASSEMBLY COMPLETE ===\n")
+            
+            return final_content
+            
+        except Exception as e:
+            print(f"Error assembling final article: {str(e)}")
+            return article_content
+
+    def _format_markdown(self, content):
+        """Apply final markdown formatting to ensure proper structure and formatting."""
+        try:
+            print(f"\n=== APPLYING FINAL MARKDOWN FORMATTING ===")
+            
+            # Extract the preserved sections first
+            preserved_sections = self._extract_sections(content)
+            
+            formatting_prompt = f"""
+                You are a markdown formatting expert. Format the following article content to ensure proper markdown structure and formatting.
+                
+                CRITICAL: DO NOT MODIFY THESE PRESERVED SECTIONS:
+                - Hook: "{preserved_sections.get('hook', '')}"
+                - Summary: "{preserved_sections.get('summary', '')}"
+                - Disclaimer: "{preserved_sections.get('disclaimer', '')}"
+                
+                REQUIREMENTS:
+                1. DO NOT change the hook, summary, or disclaimer content - keep them exactly as they are
+                2. DO NOT move, modify, or reorder the hook, summary, or disclaimer sections
+                3. Ensure all headings start with # (main heading), ## (subheadings), or ### (sub-subheadings)
+                4. Ensure proper line breaks between sections (use double line breaks)
+                5. Format bold text with **text**
+                6. Format italic text with *text*
+                7. Ensure bullet points use - or * with proper spacing
+                8. Ensure the date is properly formatted as **Date: Month DD, YYYY**
+                9. Maintain the exact structure: Hook → Line Break → Summary → Line Break → Date → Line Break → Heading → Content → CTA → Line Break → Disclaimer
+                10. Do not change the content, only improve the formatting
+                11. Ensure proper spacing between paragraphs
+                12. Make sure the heading (title) is properly formatted with # at the beginning
+                13. Ensure the date line is properly formatted with **Date: Month DD, YYYY**
+                14. Add proper line breaks between all sections
+                
+                CONTENT TO FORMAT:
+                {content}
+                
+                Return ONLY the formatted content with proper markdown formatting. Do not add any explanations or additional text.
+            """
+            
+            response = self.text_client.chat.completions.create(
+                model=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
+                messages=[
+                    {"role": "system", "content": "You are a markdown formatting expert. Always return properly formatted markdown content."},
+                    {"role": "user", "content": formatting_prompt}
+                ],
+                temperature=0.1,  # Low temperature for consistent formatting
+            )
+            
+            formatted_content = response.choices[0].message.content.strip()
+            
+            # Validate that preserved sections are still in their correct positions
+            print("Validating preserved sections after formatting...")
+            final_content = self._validate_and_cleanup_structure(formatted_content, preserved_sections)
+            
+            print("✓ Markdown formatting applied successfully")
+            print(f"=== MARKDOWN FORMATTING COMPLETE ===\n")
+            
+            return final_content
+            
+        except Exception as e:
+            print(f"Error in markdown formatting: {str(e)}")
+            print("Returning original content without markdown formatting")
             return content
 
 class ImageGenerator:

@@ -1,8 +1,3 @@
-*Weekly blog preview/summary you can use on your main blog page and Featured Article section of your email newsletter:*
-
-Independence Day reminds us that true freedom requires intentional planning and sacrifice. Just as the founders created a framework for lasting liberty, your Life & Legacy Plan creates lasting security for your loved ones. Read more…
-
-*2025.06.27*
 # Life, Liberty, and Legacy: How Life & Legacy Planning Promotes Independence 
 Every Fourth of July, we celebrate more than fireworks and barbecues. We honor the bold vision of people who refused to accept the status quo and instead created a framework for lasting freedom. The Declaration of Independence wasn't just a document—it was a comprehensive plan that established principles, assigned responsibilities, and created structures to protect future generations.
 

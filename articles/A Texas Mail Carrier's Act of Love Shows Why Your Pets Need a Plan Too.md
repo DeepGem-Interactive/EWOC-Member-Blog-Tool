@@ -1,8 +1,3 @@
-*Weekly blog preview/summary you can use on your main blog page and Featured Article section of your email newsletter:*
-
-When Ian Burke, a Texas mail carrier, rushed to adopt Floyd—a 70-pound dog whose owner had died—he saved one pet from an uncertain fate, but thousands of others aren't so lucky. Read more...
-
-*2025.06.20*
 # A Texas Mail Carrier's Act of Love Shows Why Your Pets Need a Plan Too
 When Ian Burke,, heard that Floyd—a 70-pound dog he'd befriended on his delivery route—had ended up in a shelter after his owner's death, he didn't hesitate. Burke arrived at the City of Denton Animal Shelter before it opened to be first in line to adopt Floyd and give him a new home.
 
