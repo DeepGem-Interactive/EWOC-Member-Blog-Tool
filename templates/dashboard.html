@@ -237,6 +237,41 @@
         z-index: 2;
     }
 
+    /* Fix for edit mode affecting other cards */
+    .collapse {
+        position: relative;
+        z-index: 1;
+    }
+
+    .card-body {
+        position: relative;
+    }
+
+    /* Ensure each card maintains its own height independently */
+    .article-card {
+        height: auto !important;
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .article-card .card-body {
+        height: auto !important;
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Push buttons to bottom of card */
+    .article-card .card-body > *:not(.article-header):not(.article-title):not(.article-description) {
+        margin-top: auto;
+    }
+
+    /* Ensure edit mode doesn't affect other cards */
+    .collapse.show {
+        margin-top: 1rem;
+    }
+
     /* Save message styling */
     .save-message {
         position: relative;
@@ -346,11 +381,11 @@
             
             <!-- Article card -->
             <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card h-100 article-card d-flex flex-column"
+                <div class="card article-card"
                     data-series="{{ meta.series if meta.series else 'none' }}"
                     data-series-index="{{ meta.series_order if meta.series_order else 0 }}"
                     data-publish-date="{{ meta.publish_date if meta.publish_date else '' }}">
-                    <div class="card-body d-flex flex-column">
+                    <div class="card-body">
                         <!-- Article header with preview button -->
                         <div class="article-header">
                         <div class="article-icon">
@@ -371,9 +406,6 @@
                         {% if meta and meta.description %}
                             <p class="article-description">{{ meta.description }}</p>
                         {% endif %}
-                        
-                        <!-- Spacer to push buttons to bottom -->
-                        <div class="flex-grow-1"></div>
                         
                         <!-- Article selection form -->
                         <form method="POST" action="{{ url_for('select_article', article=article) }}" class="mb-3 article-form">
