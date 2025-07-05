@@ -27,6 +27,12 @@ import io
 from PIL import Image
 import uuid
 from urllib.parse import unquote
+import asyncio
+import httpx
+import random
+import aiohttp
+
+
 
 load_dotenv()
 
@@ -46,7 +52,37 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+FUNCTION_APP_URL = os.getenv("AZURE_FUNCTION_APP_URL")
+FUNCTION_KEY = os.getenv("FUNCTION_KEY")
 Session(app)
+
+# Simulate OpenAI calls for testing
+SIMULATE_OPENAI = os.getenv("SIMULATE_OPENAI", "false").lower() == "true"
+
+async def simulate_openai_call():
+    """Simulate OpenAI call with random delay"""
+    delay = random.uniform(20, 40)  # Random delay between 20-40 seconds
+    await asyncio.sleep(delay)
+    return {"content": "Simulated response after delay"}
+
+
+async def make_async_request(url, payload):
+    """Make async HTTP request with error handling"""
+    if SIMULATE_OPENAI:
+        return await simulate_openai_call()
+
+    async with httpx.AsyncClient(timeout=60.0) as client:  # Create new client per request
+        try:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()
+            return response.json()
+        except httpx.RequestError as e:
+            print(f"Request error: {e}")
+            raise
+        except httpx.HTTPStatusError as e:
+            print(f"HTTP error: {e.response.status_code} - {e.response.text}")
+            raise
+
 
 def get_db():
     if 'db' not in g:
@@ -1956,13 +1992,36 @@ def download(filename):
         return redirect(url_for('review'))
 
 @app.route('/generate_image')
-def generate_image():
+async def generate_image():
     if 'current_post' not in session:
         return redirect(url_for('dashboard'))
+
+    # Call Azure Function for image generation
+    function_url = f"{FUNCTION_APP_URL}/api/image_generator?code={FUNCTION_KEY}"
+    payload = {
+        "text_prompt": session['current_post']['content']
+    }
+    if SIMULATE_OPENAI:
+        await simulate_openai_call()
+        session['current_post']['image'] = "dummy.png"
+        session.modified = True
+        return redirect(url_for('review'))
     
-    # Generate image based on current content
-    image_filename = image_generator.generate_image(session['current_post']['content'])
+    import aiohttp, base64, os
+    async with aiohttp.ClientSession() as client_session:
+        async with client_session.post(function_url, json=payload) as response:
+            if response.status != 200:
+                raise Exception(f"Function error: {await response.text()}")
+            result = await response.json()
     
+    image_filename = result["image_filename"]
+    os.makedirs(os.path.join(app.static_folder, 'generated'), exist_ok=True)
+    
+    # Save the image data to file
+    image_path = os.path.join(app.static_folder, 'generated', image_filename)
+    with open(image_path, 'wb') as f:
+        f.write(base64.b64decode(result["image_data"]))
+
     if image_filename:
         session['current_post']['image'] = image_filename
         session.modified = True
