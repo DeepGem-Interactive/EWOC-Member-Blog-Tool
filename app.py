@@ -1591,11 +1591,9 @@ def reset_password(token):
             return render_template('reset_password.html', token=token,
                                  error="Password must be at least 6 characters long.")
         
-        # Update user password - use index-based access for SQL Server cursor
-        hashed_password = generate_password_hash(password)
-        # reset_record[1] is the email field (index 1)
+        # Update user password - store as plain text
         db.execute('UPDATE users SET password = ? WHERE email = ?', 
-                  (hashed_password, reset_record[1]))
+                  (password, reset_record[1]))
         
         # Mark token as used
         db.execute('UPDATE password_resets SET used = 1 WHERE token = ?', (token,))
