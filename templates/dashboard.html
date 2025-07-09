@@ -409,14 +409,6 @@
                         
                         <!-- Article selection form -->
                         <form method="POST" action="{{ url_for('select_article', article=article) }}" class="mb-3 article-form">
-                            <input type="hidden" name="firm" value="{{ user.firm }}">
-                            <input type="hidden" name="location" value="{{ user.location }}">
-                            <input type="hidden" name="lawyer_name" value="{{ user.lawyer_name }}">
-                            <input type="hidden" name="state" value="{{ user.state }}">
-                            <input type="hidden" name="address" value="{{ user.address }}">
-                            <input type="hidden" name="planning_session" value="{{ user.planning_session }}">
-                            <input type="hidden" name="other_planning_session" value="{{ user.other_planning_session }}">
-                            <input type="hidden" name="discovery_call_link" value="{{ user.discovery_call_link }}">
                             <button type="submit" class="btn btn-primary w-100">
                                 <i data-feather="edit-2" class="icon-sm me-1"></i>Generate Article
                             </button>
@@ -447,12 +439,49 @@
                                             <p class="mb-2"><strong>Other Planning Session:</strong> <span class="other-planning-session-value">{{ user.other_planning_session }}</span></p>
                                             {% endif %}
                                             {% if user.discovery_call_link %}
-                                            <p class="mb-0"><strong>Discovery Call Link:</strong> <span class="discovery-call-link-value">{{ user.discovery_call_link }}</span></p>
+                                            <p class="mb-2"><strong>Discovery Call Link:</strong> <span class="discovery-call-link-value">{{ user.discovery_call_link }}</span></p>
                                             {% endif %}
+                                            
+                                            <!-- Tone and Keywords in View Mode -->
+                                            <div class="mt-3 pt-2 border-top">
+                                                <p class="mb-2"><strong>Writing Tone:</strong> 
+                                                    <span class="selected-tone-value">
+                                                        {% if user.selected_tone %}{{ user.selected_tone }}{% else %}Professional{% endif %}
+                                                    </span>
+                                                </p>
+                                                <p class="mb-2 text-muted small selected-tone-description">
+                                                    {% if user.selected_tone and user.tone_description %}
+                                                        {{ user.tone_description }}
+                                                    {% elif user.selected_tone %}
+                                                        {% for tone, desc in tone_descriptions.items() %}
+                                                            {% if tone == user.selected_tone %}{{ desc }}{% endif %}
+                                                        {% endfor %}
+                                                    {% else %}
+                                                        Formal and business-like tone suitable for corporate audiences
+                                                    {% endif %}
+                                                </p>
+                                                <p class="mb-1"><strong>Keywords:</strong></p>
+                                                <div class="view-keywords">
+                                                    {% if user.keywords and user.keywords.strip() %}
+                                                        {% for keyword in user.keywords.split(',') %}
+                                                            {% if keyword.strip() %}
+                                                            <span class="badge bg-primary me-1 mb-1">{{ keyword.strip() }}</span>
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                    {% else %}
+                                                        <span class="text-muted small">No keywords selected</span>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
                             </div>
                             
                                         <!-- Edit Mode -->
                                         <div class="info-edit-mode" style="display: none;">
+                                            <div class="mb-3">
+                                                <p class="text-muted small mb-0">
+                                                    Customize your firm's information to personalize your generated articles.
+                                                </p>
+                                            </div>
                                             <div class="mb-2">
                                                 <label class="form-label"><strong>Firm Name:</strong></label>
                                                 <input type="text" class="form-control form-control-sm firm-input" value="{{ user.firm }}">
@@ -501,10 +530,93 @@
                                                     <input type="text" class="form-control form-control-sm planning-session-input" value="{{ user.planning_session }}" placeholder="Enter your planning session name">
                                     </div>
                                     </div>
-                                    <div class="mb-2">
+                                                                                <div class="mb-2">
                                                 <label class="form-label"><strong>Discovery Call Link:</strong></label>
                                                 <input type="text" class="form-control form-control-sm discovery-call-link-input" value="{{ user.discovery_call_link }}">
                                             </div>
+
+                                            <!-- Tone selection section -->
+                                            <div class="mt-4">
+                                                <!-- Standard tone options -->
+                                                <div class="mb-3">
+                                                    <label class="form-label"><strong>Select Writing Tone:</strong></label>
+                                                    {% for tone in tone_options %}
+                                                    <div class="tone-option" id="tone-option-{{ loop.index }}-{{ article_index }}">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input tone-radio" type="radio" name="tone-{{ article_index }}" 
+                                                                   id="tone-{{ loop.index }}-{{ article_index }}" value="{{ tone }}"
+                                                                   data-description="{{ tone_descriptions[tone] }}"
+                                                                   {% if user.selected_tone == tone %}checked{% elif loop.first and not user.selected_tone %}checked{% endif %}>
+                                                            <label class="form-check-label" for="tone-{{ loop.index }}-{{ article_index }}">
+                                                                <strong>{{ tone }}</strong>
+                                                            </label>
+                                                        </div>
+                                                        <div class="tone-description small text-muted">{{ tone_descriptions[tone] }}</div>
+                                                    </div>
+                                                    {% endfor %}
+                                                    
+                                                    <!-- Create new tone option -->
+                                                    <div class="tone-option" id="tone-option-new-{{ article_index }}">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input tone-radio" type="radio" name="tone-{{ article_index }}" 
+                                                                   id="tone-new-{{ article_index }}" value="custom">
+                                                            <label class="form-check-label" for="tone-new-{{ article_index }}">
+                                                                <strong>Create New Tone</strong>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Custom tone input section -->
+                                                    <div id="customToneGroup-{{ article_index }}" class="custom-tone-container" style="display: none;">
+                                                        <div class="form-floating mb-2">
+                                                            <textarea class="form-control form-control-sm" id="customTone-{{ article_index }}"
+                                                                      placeholder="Describe your desired tone..." style="height: 80px"></textarea>
+                                                            <label for="customTone-{{ article_index }}">Describe your preferred tone</label>
+                                                        </div>
+                                                        
+                                                        <!-- Save tone section -->
+                                                        <div id="save-tone-group-{{ article_index }}" class="save-tone-container">
+                                                            <div class="input-group mb-2">
+                                                                <input type="text" class="form-control form-control-sm" id="tone-name-{{ article_index }}" 
+                                                                       placeholder="Name for this tone">
+                                                            </div>
+                                                            <button type="button" class="btn btn-success btn-sm save-tone" data-index="{{ article_index }}">
+                                                                <i data-feather="plus" class="icon-sm me-1"></i>Save Tone
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                                                                <!-- Keywords Section -->
+                                                <div class="keyword-container">
+                                                    <label class="form-label"><strong>Keywords for Blog:</strong></label>
+                                                    <div class="keyword-input-group">
+                                                        <input type="text" class="form-control form-control-sm" id="keyword-input-{{ article_index }}" 
+                                                               placeholder="Type a keyword">
+                                                        <button type="button" class="btn btn-primary btn-sm" id="add-keyword-btn-{{ article_index }}">
+                                                            <i data-feather="plus" class="icon-xs"></i> Add
+                                                        </button>
+                                                    </div>
+                                                    <input type="hidden" name="keywords-{{ article_index }}" id="keywords-hidden-{{ article_index }}">
+                                                    
+                                                    <div class="mb-2">
+                                                        <small class="text-muted">Keywords:</small>
+                                                        <div class="selected-keywords" id="selected-keywords-{{ article_index }}">
+                                                            {% if user and user.keywords %}
+                                                                {% for keyword in user.keywords.split(',') %}
+                                                                    {% if keyword.strip() %}
+                                                                    <span class="badge selected-keyword keyword-badge me-1 mb-1" data-keyword="{{ keyword.strip() }}">
+                                                                        {{ keyword.strip() }}
+                                                                        <span class="remove-keyword ms-1" style="cursor: pointer;">×</span>
+                                                                    </span>
+                                                                    {% endif %}
+                                                                {% endfor %}
+                                                            {% endif %}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
                                             <div class="mt-3">
                                                 <button type="button" class="btn btn-sm btn-primary save-info-btn w-100 mb-2">Save Changes</button>
                                                 <button type="button" class="btn btn-sm btn-secondary cancel-edit-btn w-100">Cancel</button>
@@ -597,6 +709,10 @@
                     bsCollapse.show();
                 }
 
+                // Load previously selected keywords
+                const articleIndex = this.closest('.article-card').querySelector('.tone-radio').name.split('-')[1];
+                loadSavedKeywords(articleIndex);
+
                 // Update button state with null check
                 this.classList.add('active');
                 const icon = this.querySelector('i');
@@ -632,23 +748,18 @@
         
         document.querySelectorAll('.save-info-btn').forEach(button => {
             button.addEventListener('click', function() {
-                console.log('Save button clicked'); // Debug log
-                
                 // Show loading state
                 const originalText = this.textContent;
                 this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving...';
                 this.disabled = true;
                 
                 const card = this.closest('.card');
-                console.log('Card found:', card); // Debug log
                 
                 const selectedRadio = card.querySelector('input[name="planningSession"]:checked');
-                console.log('Selected radio:', selectedRadio); // Debug log
                 let planningSession = selectedRadio ? selectedRadio.value : '';
                 
                 if (planningSession === 'other') {
                     const otherInput = card.querySelector('.planning-session-input');
-                    console.log('Other input:', otherInput); // Debug log
                     planningSession = otherInput ? otherInput.value : '';
                 }
                 
@@ -660,14 +771,14 @@
                 const addressInput = card.querySelector('.address-input');
                 const discoveryCallLinkInput = card.querySelector('.discovery-call-link-input');
                 
-                console.log('Form elements found:', {
-                    firmInput,
-                    locationInput,
-                    lawyerNameInput,
-                    stateInput,
-                    addressInput,
-                    discoveryCallLinkInput
-                }); // Debug log
+                // Get selected tone
+                const selectedToneRadio = card.querySelector('input[name^="tone-"]:checked');
+                const selectedTone = selectedToneRadio ? selectedToneRadio.value : '';
+                const toneDescription = selectedToneRadio ? selectedToneRadio.getAttribute('data-description') : '';
+                
+                // Get keywords from the keywords section
+                const keywordsHidden = card.querySelector('[id^="keywords-hidden-"]');
+                const keywords = keywordsHidden ? keywordsHidden.value : '';
                 
                 const data = {
                     firm: (firmInput || {}).value || '',
@@ -676,10 +787,13 @@
                     state: (stateInput || {}).value || '',
                     address: (addressInput || {}).value || '',
                     planning_session: planningSession,
-                    discovery_call_link: (discoveryCallLinkInput || {}).value || ''
+                    discovery_call_link: (discoveryCallLinkInput || {}).value || '',
+                    selected_tone: selectedTone,
+                    tone_description: toneDescription,
+                    keywords: keywords
                 };
                 
-                console.log('Sending data:', data); // Debug log
+                // Send the data to the server
                 
                 // Send the data to the server
                 fetch('/profile', {
@@ -690,11 +804,9 @@
                     body: JSON.stringify(data)
                 })
                 .then(response => {
-                    console.log('Response status:', response.status); // Debug log
                     return response.json();
                 })
                 .then(data => {
-                    console.log('Response data:', data); // Debug log
                     
                     // Reset button state
                     this.innerHTML = originalText;
@@ -726,6 +838,46 @@
                         const discoveryCallLinkValue = viewMode.querySelector('.discovery-call-link-value');
                         if (discoveryCallLinkValue) discoveryCallLinkValue.textContent = data.discovery_call_link;
 
+                        // Update tone and keywords in view mode
+                        const selectedToneValue = viewMode.querySelector('.selected-tone-value');
+                        if (selectedToneValue) selectedToneValue.textContent = data.selected_tone || 'Professional';
+                        
+                        // Update tone description
+                        const selectedToneDescription = viewMode.querySelector('.selected-tone-description');
+                        if (selectedToneDescription) {
+                            if (data.tone_description) {
+                                selectedToneDescription.textContent = data.tone_description;
+                            } else {
+                                // Fallback to default descriptions
+                                const defaultDescriptions = {
+                                    'Professional': 'Formal and business-like tone suitable for corporate audiences',
+                                    'Friendly': 'Warm and approachable tone that builds rapport with readers',
+                                    'Educational': 'Clear and informative tone designed to explain concepts'
+                                };
+                                selectedToneDescription.textContent = defaultDescriptions[data.selected_tone] || 'Formal and business-like tone suitable for corporate audiences';
+                            }
+                        }
+                        
+                        const viewKeywords = viewMode.querySelector('.view-keywords');
+                        if (viewKeywords) {
+                            // Get keywords from the hidden input (which is updated when keywords are added/removed)
+                            const keywordsHidden = card.querySelector('[id^="keywords-hidden-"]');
+                            const keywords = keywordsHidden ? keywordsHidden.value : '';
+                            
+                            if (keywords && keywords.trim()) {
+                                const keywordArray = keywords.split(',').map(k => k.trim()).filter(k => k);
+                                if (keywordArray.length > 0) {
+                                    viewKeywords.innerHTML = keywordArray.map(keyword => 
+                                        `<span class="badge bg-primary me-1 mb-1">${keyword}</span>`
+                                    ).join('');
+                                } else {
+                                    viewKeywords.innerHTML = '<span class="text-muted small">No keywords selected</span>';
+                                }
+                            } else {
+                                viewKeywords.innerHTML = '<span class="text-muted small">No keywords selected</span>';
+                            }
+                        }
+
                         // Switch back to view mode
                         const editMode = card.querySelector('.info-edit-mode');
                         const editBtn = card.querySelector('.edit-info-btn');
@@ -744,10 +896,8 @@
                         feather.replace();
 
                         // Show success message
-                        console.log('Showing success message'); // Debug log
                         showSaveMessage(card, 'Changes Saved', 'success');
                     } else {
-                        console.log('Showing error message'); // Debug log
                         showSaveMessage(card, 'Failed to save changes. Please try again.', 'error');
                     }
                 })
@@ -765,7 +915,6 @@
         
         // Function to show save message
         function showSaveMessage(card, message, type) {
-            console.log('showSaveMessage called with:', message, type); // Debug log
             
             const modal = document.getElementById('saveMessageModal');
             const modalInstance = new bootstrap.Modal(modal);
@@ -954,6 +1103,189 @@
         var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl)
         });
+
+        // Tone selection functionality
+        document.querySelectorAll('.tone-radio').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const articleIndex = this.name.split('-')[1];
+                const customToneGroup = document.getElementById(`customToneGroup-${articleIndex}`);
+                
+                if (this.value === 'custom') {
+                    customToneGroup.style.display = 'block';
+                } else {
+                    customToneGroup.style.display = 'none';
+                }
+            });
+        });
+
+        // Save custom tone functionality
+        document.querySelectorAll('.save-tone').forEach(button => {
+            button.addEventListener('click', function() {
+                const articleIndex = this.dataset.index;
+                const toneName = document.getElementById(`tone-name-${articleIndex}`).value.trim();
+                const toneDescription = document.getElementById(`customTone-${articleIndex}`).value.trim();
+                
+                if (!toneName || !toneDescription) {
+                    alert('Please provide both a tone name and description.');
+                    return;
+                }
+                
+                fetch('/add_tone', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        tone_name: toneName,
+                        tone_description: toneDescription
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Update the radio button to use the new tone
+                        const customRadio = document.getElementById(`tone-new-${articleIndex}`);
+                        customRadio.value = toneName;
+                        customRadio.setAttribute('data-description', toneDescription);
+                        
+                        // Update the label
+                        const label = customRadio.nextElementSibling;
+                        label.innerHTML = `<strong>${toneName}</strong>`;
+                        
+                        // Add description
+                        const toneOption = customRadio.closest('.tone-option');
+                        let descriptionDiv = toneOption.querySelector('.tone-description');
+                        if (!descriptionDiv) {
+                            descriptionDiv = document.createElement('div');
+                            descriptionDiv.className = 'tone-description small text-muted';
+                            toneOption.appendChild(descriptionDiv);
+                        }
+                        descriptionDiv.textContent = toneDescription;
+                        
+                        // Clear inputs
+                        document.getElementById(`tone-name-${articleIndex}`).value = '';
+                        document.getElementById(`customTone-${articleIndex}`).value = '';
+                        document.getElementById(`customToneGroup-${articleIndex}`).style.display = 'none';
+                        
+                        // Select the new tone
+                        customRadio.checked = true;
+                        
+                        showSaveMessage(card, 'Custom tone saved successfully!', 'success');
+                    } else {
+                        showSaveMessage(card, data.error || 'Failed to save tone.', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showSaveMessage(card, 'Failed to save tone. Please try again.', 'error');
+                });
+            });
+        });
+
+        // Keywords functionality
+        document.querySelectorAll('[id^="add-keyword-btn-"]').forEach(button => {
+            button.addEventListener('click', function() {
+                const articleIndex = this.id.split('-').pop();
+                const keywordInput = document.getElementById(`keyword-input-${articleIndex}`);
+                const keyword = keywordInput.value.trim();
+                
+                if (!keyword) {
+                    alert('Please enter a keyword.');
+                    return;
+                }
+                
+                addKeyword(articleIndex, keyword);
+                keywordInput.value = '';
+            });
+        });
+
+        // Allow Enter key to add keywords
+        document.querySelectorAll('[id^="keyword-input-"]').forEach(input => {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const articleIndex = this.id.split('-').pop();
+                    const keyword = this.value.trim();
+                    
+                    if (keyword) {
+                        addKeyword(articleIndex, keyword);
+                        this.value = '';
+                    }
+                }
+            });
+        });
+
+        // Remove keywords
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('remove-keyword')) {
+                e.preventDefault();
+                e.stopPropagation();
+                const keywordBadge = e.target.closest('.keyword-badge');
+                const articleCard = keywordBadge.closest('.article-card');
+                const articleIndex = articleCard.querySelector('.tone-radio').name.split('-')[1];
+                keywordBadge.remove();
+                updateKeywordsHidden(articleIndex);
+            }
+        });
+
+        function addKeyword(articleIndex, keyword) {
+            const selectedKeywordsDiv = document.getElementById(`selected-keywords-${articleIndex}`);
+            const keywordsHidden = document.getElementById(`keywords-hidden-${articleIndex}`);
+            
+            // Check if keyword already exists
+            const existingKeywords = selectedKeywordsDiv.querySelectorAll('.keyword-badge');
+            for (let existing of existingKeywords) {
+                if (existing.dataset.keyword === keyword) {
+                    return; // Keyword already exists
+                }
+            }
+            
+            // Create keyword badge
+            const keywordBadge = document.createElement('span');
+            keywordBadge.className = 'badge selected-keyword keyword-badge me-1 mb-1';
+            keywordBadge.dataset.keyword = keyword;
+            keywordBadge.textContent = keyword;
+            
+            // Add remove button
+            const removeBtn = document.createElement('span');
+            removeBtn.className = 'remove-keyword ms-1';
+            removeBtn.innerHTML = '&times;';
+            removeBtn.style.cursor = 'pointer';
+            
+            keywordBadge.appendChild(removeBtn);
+            selectedKeywordsDiv.appendChild(keywordBadge);
+            
+            updateKeywordsHidden(articleIndex);
+        }
+
+        function updateKeywordsHidden(articleIndex) {
+            const selectedKeywordsDiv = document.getElementById(`selected-keywords-${articleIndex}`);
+            const keywordsHidden = document.getElementById(`keywords-hidden-${articleIndex}`);
+            
+            const keywords = Array.from(selectedKeywordsDiv.querySelectorAll('.keyword-badge'))
+                .map(badge => badge.dataset.keyword);
+            
+            keywordsHidden.value = keywords.join(',');
+        }
+
+        function loadSavedKeywords(articleIndex) {
+            // Get user's saved keywords from the server response
+            const userKeywords = '{{ user.keywords or "" }}';
+            if (userKeywords && userKeywords.trim()) {
+                const keywords = userKeywords.split(',').map(k => k.trim()).filter(k => k);
+                // Update the hidden input first
+                const keywordsHidden = document.getElementById(`keywords-hidden-${articleIndex}`);
+                if (keywordsHidden) {
+                    keywordsHidden.value = keywords.join(',');
+                }
+                // Then add the visual badges
+                keywords.forEach(keyword => {
+                    addKeyword(articleIndex, keyword);
+                });
+            }
+        }
+
+
     });
 </script>
 {% endblock %}

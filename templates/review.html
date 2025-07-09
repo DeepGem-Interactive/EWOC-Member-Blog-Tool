@@ -235,6 +235,26 @@
                                     </div>
                                 </div>
 
+                                <!-- Source Article Display -->
+                                <div class="card mb-4">
+                                    <div class="card-header bg-light">
+                                        <h2 class="h5 mb-0">Source Article</h2>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="preview-container" style="max-height: 600px; overflow-y: auto;">
+                                            {% if source_article_content %}
+                                                {{ source_article_content|safe }}
+                                            {% else %}
+                                                <div class="alert alert-info">
+                                                    Source article not available.
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Chat History (Commented out for now) -->
+                                <!--
                                 <div class="card mb-4">
                                     <div class="card-header bg-light">
                                         <h2 class="h5 mb-0">Chat History</h2>
@@ -258,6 +278,7 @@
                                         </div>
                                     </div>
                                 </div>
+                                -->
 
                                 <div class="card">
                                     <div class="card-body">
@@ -435,26 +456,12 @@
         // Handle AI Editor preview
         const aiPreview = document.querySelector('#ai .preview-container');
         if (aiPreview) {
-            // Update preview when chat history changes
-            const chatHistory = document.querySelector('.chat-history');
-            if (chatHistory) {
-                const observer = new MutationObserver(function(mutations) {
-                    // Find the latest blog content in chat history
-                    const blogMessages = chatHistory.querySelectorAll('.chat-message.assistant .content.blog');
-                    if (blogMessages.length > 0) {
-                        const latestBlog = blogMessages[blogMessages.length - 1];
-                        updatePreview(latestBlog.textContent, aiPreview);
-                    }
-                });
-
-                observer.observe(chatHistory, {
-                    childList: true,
-                    subtree: true
-                });
-            }
+            // Update preview when content changes (removed chat history observer since it's commented out)
+            // The preview will be updated through the form submission redirect
         }
 
-        // Handle chat history scrolling and new message indicator
+        // Handle chat history scrolling and new message indicator (Commented out since chat history is disabled)
+        /*
         const chatHistory = document.querySelector('.chat-history');
         const newMessageIndicator = document.querySelector('.new-message-indicator');
         let lastScrollTop = 0;
@@ -498,8 +505,10 @@
             // Initial scroll to bottom
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }
+        */
 
-        // Handle message previews
+        // Handle message previews (Commented out since chat history is disabled)
+        /*
         function initializeMessagePreviews() {
             const messages = document.querySelectorAll('.chat-message');
             messages.forEach(message => {
@@ -559,6 +568,7 @@
                 subtree: true
             });
         }
+        */
 
         // Handle image generation
         function generateImage(section) {
