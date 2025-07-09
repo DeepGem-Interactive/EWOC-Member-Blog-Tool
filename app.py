@@ -158,6 +158,30 @@ def init_db():
             ''')
         except pyodbc.Error:
             pass
+            
+        try:
+            cursor.execute('''
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'selected_tone')
+            ALTER TABLE users ADD selected_tone NVARCHAR(255)
+            ''')
+        except pyodbc.Error:
+            pass
+            
+        try:
+            cursor.execute('''
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'tone_description')
+            ALTER TABLE users ADD tone_description NVARCHAR(MAX)
+            ''')
+        except pyodbc.Error:
+            pass
+            
+        try:
+            cursor.execute('''
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'keywords')
+            ALTER TABLE users ADD keywords NVARCHAR(MAX)
+            ''')
+        except pyodbc.Error:
+            pass
         
         # Update password column size to accommodate hashed passwords
         try:
@@ -314,17 +338,18 @@ class UserSession:
         return False
 
     @staticmethod
-    def update_profile(username, firm, location, lawyer_name, state, address="", planning_session="", other_planning_session="", discovery_call_link=""):
+    def update_profile(username, firm, location, lawyer_name, state, address="", planning_session="", other_planning_session="", discovery_call_link="", selected_tone="", tone_description="", keywords=""):
         db = get_db()
         try:
             cursor = db.cursor()
             cursor.execute('''
             UPDATE users 
             SET firm = ?, location = ?, lawyer_name = ?, state = ?, 
-                address = ?, planning_session = ?, other_planning_session = ?, discovery_call_link = ?
+                address = ?, planning_session = ?, other_planning_session = ?, discovery_call_link = ?,
+                selected_tone = ?, tone_description = ?, keywords = ?
             WHERE username = ?
             ''', (firm, location, lawyer_name, state, address, planning_session, 
-                 other_planning_session, discovery_call_link, username))
+                 other_planning_session, discovery_call_link, selected_tone, tone_description, keywords, username))
             db.commit()
             
             # Update session if this is the current user
@@ -337,7 +362,10 @@ class UserSession:
                     'address': address,
                     'planning_session': planning_session,
                     'other_planning_session': other_planning_session,
-                    'discovery_call_link': discovery_call_link
+                    'discovery_call_link': discovery_call_link,
+                    'selected_tone': selected_tone,
+                    'tone_description': tone_description,
+                    'keywords': keywords
                 })
                 session.modified = True
             return True
@@ -676,7 +704,7 @@ class AzureServices:
             print("Unable to validate article components. Please check the generated content manually.")
             return None
 
-    def rewrite_content(self, original_text, tone, tone_description, keywords, firm_name, location, lawyer_name, city, state, discovery_call_link, planning_session_name="Life & Legacy Planning Session"):
+    def rewrite_content(self, original_text, tone, tone_description, keywords, firm_name, location, lawyer_name, city, state, discovery_call_link, planning_session_name="15-minute discovery call"):
         try:
             # Extract sections to preserve
             print("\nExtracting sections to preserve...")
@@ -750,9 +778,15 @@ class AzureServices:
                 TONE: {tone} - {tone_description}
                 
                 CTA REQUIREMENTS:
-                - Use "15-minute Discovery Call"
-                - Include scheduling link: {discovery_call_link}
+                - Use "15-minute discovery call" (lowercase) as clickable text
+                - Format as markdown link: [15-minute discovery call]({discovery_call_link})
+                - Include this link in the CTA paragraph
                 - End content immediately after CTA
+                
+                LINK TEXT REQUIREMENTS:
+                - Use descriptive link text that explains what the link does
+                - DO NOT use generic phrases like "click here", "read more", "learn more"
+                - Use specific, action-oriented text like "schedule your consultation", "book your session", "get started today"
                 
                 Generate ONLY the main content (heading + body + CTA). The system will add hook, summary, date, and disclaimer automatically.
             """
@@ -776,7 +810,7 @@ class AzureServices:
             
             # Final assembly with template
             print("\nAssembling final article with template...")
-            final_content = self._assemble_final_article(preserved_sections['hook'], summary, rewritten_content, preserved_sections['disclaimer'])
+            final_content = self._assemble_final_article(preserved_sections['hook'], summary, rewritten_content, preserved_sections['disclaimer'], firm_name, discovery_call_link)
             
             # Validate the generated content using GPT
             components = {
@@ -1084,7 +1118,7 @@ class AzureServices:
             print(f"Error cleaning article content: {str(e)}")
             return article_content
 
-    def _assemble_final_article(self, hook, summary, article_content, disclaimer):
+    def _assemble_final_article(self, hook, summary, article_content, disclaimer, firm_name="", discovery_call_link=""):
         """Assemble the final article using external template file"""
         try:
             print(f"\n=== ASSEMBLING FINAL ARTICLE WITH EXTERNAL TEMPLATE ===")
@@ -1121,6 +1155,8 @@ The content is sourced from Personal Family Lawyer® for use by Personal Family 
             final_content = final_content.replace('{current_date}', current_date)
             final_content = final_content.replace('{newly generated Title with proper markdown formatting}', '')
             final_content = final_content.replace('{newly generated content with proper markdown formatting}', cleaned_content if cleaned_content else '')
+            final_content = final_content.replace('{firm_name}', firm_name if firm_name else '[Firm Name]')
+            final_content = final_content.replace('{discovery_call_link}', discovery_call_link if discovery_call_link else '#')
             
             # Remove the preview text line if no hook is provided
             if not hook or not hook.strip():
@@ -1331,6 +1367,41 @@ class FileManager:
         
         doc = Document(normalized_path)
         return "\n".join([para.text for para in doc.paragraphs])
+
+    @staticmethod
+    def read_markdown(filename):
+        """
+        Read content from a markdown file
+        Args:
+            filename: Name of the markdown file (may be URL-encoded)
+        Returns:
+            Markdown content
+        """
+        # URL-decode the filename first
+        decoded_filename = unquote(filename)
+        
+        # Convert .docx extension to .md extension
+        if decoded_filename.endswith('.docx'):
+            markdown_filename = decoded_filename.replace('.docx', '.md')
+        else:
+            markdown_filename = decoded_filename
+        
+        # Check if the file exists in the articles directory
+        filepath = os.path.join(Config.ARTICLES_DIR, markdown_filename)
+        
+        # Normalize the path to prevent path traversal
+        normalized_path = os.path.normpath(filepath)
+        
+        # Simple path traversal check - look for .. in the path
+        if '..' in normalized_path:
+            raise ValueError("Path traversal detected")
+        
+        # Check if file exists
+        if not os.path.exists(normalized_path):
+            raise FileNotFoundError(f"Markdown file not found: {markdown_filename}")
+        
+        with open(normalized_path, 'r', encoding='utf-8') as f:
+            return f.read()
     
     @staticmethod
     def save_content(content):
@@ -1475,6 +1546,8 @@ def profile():
             address = data.get('address', '')
             planning_session = data.get('planning_session', '')
             discovery_call_link = data.get('discovery_call_link', '')
+            selected_tone = data.get('selected_tone', '')
+            tone_description = data.get('tone_description', '')
             keywords = data.get('keywords', '')
         else:
             firm = request.form['firm']
@@ -1484,9 +1557,11 @@ def profile():
             address = request.form.get('address', '')
             planning_session = request.form.get('planning_session', '')
             discovery_call_link = request.form.get('discovery_call_link', '')
+            selected_tone = request.form.get('selected_tone', '')
+            tone_description = request.form.get('tone_description', '')
             keywords = request.form.get('keywords', '')
         
-        if UserSession.update_profile(user['username'], firm, location, lawyer_name, state, address, planning_session, "", discovery_call_link):
+        if UserSession.update_profile(user['username'], firm, location, lawyer_name, state, address, planning_session, "", discovery_call_link, selected_tone, tone_description, keywords):
             session['user']['firm'] = firm
             session['user']['location'] = location
             session['user']['lawyer_name'] = lawyer_name
@@ -1494,6 +1569,8 @@ def profile():
             session['user']['address'] = address
             session['user']['planning_session'] = planning_session
             session['user']['discovery_call_link'] = discovery_call_link
+            session['user']['selected_tone'] = selected_tone
+            session['user']['tone_description'] = tone_description
             session['user']['keywords'] = keywords
             session.modified = True
             
@@ -1507,7 +1584,10 @@ def profile():
                     'state': state,
                     'address': address,
                     'planning_session': planning_session,
-                    'discovery_call_link': discovery_call_link
+                    'discovery_call_link': discovery_call_link,
+                    'selected_tone': selected_tone,
+                    'tone_description': tone_description,
+                    'keywords': keywords
                 })
             
             return redirect(url_for('dashboard'))
@@ -1634,7 +1714,8 @@ def dashboard():
         ('Educational', 'Clear and informative tone designed to explain concepts')
     ]
     
-    custom_tones = user.get('custom_tones', [])
+    # Get user's custom tones from database
+    custom_tones = UserSession.get_custom_tones(user['id'])
     all_tones = standard_tones + [(t['name'], t['description']) for t in custom_tones]
     
     # Convert to the format expected by the template
@@ -1712,23 +1793,27 @@ def select_article(article):
     location = ''
     
     if request.method == 'POST':
-        tone = request.form.get('tone')
-        tone_description = request.form.get('toneDescription')
-        custom_tone = request.form.get('customToneName')
-
-        if tone == 'custom' and custom_tone:
-            tone = custom_tone
+        # Use user's saved tone and keywords from their profile
+        tone = user.get('selected_tone', 'Professional')
+        tone_description = user.get('tone_description', '')
+        
+        # If no custom tone description is saved, use default descriptions
+        if not tone_description:
+            default_descriptions = {
+                'Professional': 'Formal and business-like tone suitable for corporate audiences',
+                'Friendly': 'Warm and approachable tone that builds rapport with readers',
+                'Educational': 'Clear and informative tone designed to explain concepts'
+            }
+            tone_description = default_descriptions.get(tone, 'Formal and business-like tone suitable for corporate audiences')
             
-        keywords = request.form.get('keywords', '')
-        firm = request.form.get('firm', '')
-        location = request.form.get('location', '')
+        keywords = user.get('keywords', '')
+        firm = user.get('firm', '')
+        location = user.get('location', '')
         lawyer_name = user.get('lawyer_name', '')
         city = user.get('location', '')
         state = user.get('state', '')
-        planning_session_name = request.form.get('planning_session_name','') 
-        discovery_call_link = request.form.get('discovery_call_link','')
-        if not planning_session_name:
-            planning_session_name="Life & Legacy Planning Session"
+        planning_session_name = user.get('planning_session', '15-minute discovery call')
+        discovery_call_link = user.get('discovery_call_link', '')
 
         # Generate the blog post with the selected tone
         blog_content = azure_services.rewrite_content(
@@ -1920,11 +2005,23 @@ def review():
         post['filename'] = filename
         session['current_post'] = post
     
+    # Get source article content if available
+    source_article_content = None
+    if 'original' in post:
+        try:
+            markdown_content = FileManager.read_markdown(post['original'])
+            # Convert markdown to HTML for proper display
+            source_article_content = markdown.markdown(markdown_content)
+        except Exception as e:
+            print(f"Error reading source article: {e}")
+            source_article_content = "Source article not available"
+    
     image_url = url_for('static', filename=f'generated/{post["image"]}') if post.get('image') else None
     
     return render_template('review.html', 
                          post=post,
                          chat_history=session['chat_history'],
+                         source_article_content=source_article_content,
                          image_url=image_url)
 
 @app.route('/save_changes', methods=['POST'])
