@@ -1783,7 +1783,7 @@ def submit_feedback():
         return jsonify({'success': False, 'message': 'An error occurred while submitting feedback'})
 
 @app.route('/select/<article>', methods=['GET', 'POST'])
-def select_article(article):
+async def select_article(article):
     user = UserSession.get_current_user()
     if not user:
         return redirect(url_for('login'))
@@ -1815,20 +1815,35 @@ def select_article(article):
         planning_session_name = user.get('planning_session', '15-minute discovery call')
         discovery_call_link = user.get('discovery_call_link', '')
 
-        # Generate the blog post with the selected tone
-        blog_content = azure_services.rewrite_content(
-            FileManager.read_docx(article),
-            tone,
-            tone_description,
-            keywords,
-            firm,
-            location,
-            lawyer_name,
-            city,
-            state,
-            planning_session_name,
-            discovery_call_link
-        )
+        # Call Azure Function for content generation
+        function_url = f"{FUNCTION_APP_URL}/api/content_generator?code={FUNCTION_KEY}"
+        
+        payload = {
+            "original_text": FileManager.read_docx(article),
+            "tone": tone,
+            "tone_description": tone_description,
+            "keywords": keywords,
+            "firm_name": firm,
+            "location": location,
+            "lawyer_name": lawyer_name,
+            "city": city,
+            "state": state,
+            "planning_session_name": planning_session_name,
+            "discovery_call_link": discovery_call_link
+        }
+        
+        if SIMULATE_OPENAI:
+            await simulate_openai_call()
+            blog_content = "Simulated blog content"
+        else:
+            import aiohttp
+            async with aiohttp.ClientSession() as client_session:
+                async with client_session.post(function_url, json=payload) as response:
+                    if response.status != 200:
+                        raise Exception(f"Function error: {await response.text()}")
+                    
+                    result = await response.json()
+                    blog_content = result["content"]
         
         # Save the generated content to a file
         filename = FileManager.save_content(blog_content)
@@ -1902,7 +1917,7 @@ def finalize():
                          image_url=image_url)
 
 @app.route('/review', methods=['GET', 'POST'])
-def review():
+async def review():
     # Check if we have a filename parameter but no current_post in session
     filename = request.args.get('filename')
     if filename and 'current_post' not in session:
@@ -1964,11 +1979,26 @@ def review():
                 post['content']
             )
             
-            edited_content = azure_services.edit_content(
-                session['session_id'],
-                user_message,
-                current_content
-            )
+            # Call Azure Function for content editing
+            function_url = f"{FUNCTION_APP_URL}/api/content_editor?code={FUNCTION_KEY}"
+            payload = {
+                "session_id": session['session_id'],
+                "user_message": user_message,
+                "current_content": current_content
+            }
+            
+            if SIMULATE_OPENAI:
+                await simulate_openai_call()
+                edited_content = current_content  # Return current content for simulation
+            else:
+                import aiohttp
+                async with aiohttp.ClientSession() as client_session:
+                    async with client_session.post(function_url, json=payload) as response:
+                        if response.status != 200:
+                            raise Exception(f"Function error: {await response.text()}")
+                        
+                        result = await response.json()
+                        edited_content = result["edited_content"]
             
             session['chat_history'].append({
                 'role': 'user',

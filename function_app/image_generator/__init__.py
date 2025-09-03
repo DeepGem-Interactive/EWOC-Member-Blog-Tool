@@ -25,6 +25,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         with open(image_path, 'rb') as image_file:
             image_data = base64.b64encode(image_file.read()).decode('utf-8')
 
+        # Log successful invocation for monitoring
+        logging.info(f"Image generator function completed successfully. Image filename: {image_filename}")
+        logging.info(f"Function invocation parameters - Text prompt length: {len(text_prompt)}")
+
         return func.HttpResponse(
             json.dumps({
                 "image_filename": image_filename,
