@@ -16,7 +16,7 @@ class AzureServices:
         
         self.conversations = {}
 
-    def rewrite_content(self, original_text, tone, tone_description, keywords, firm_name, location, lawyer_name, city, state, planning_session_name="Life & Legacy Planning Session"):
+    def rewrite_content(self, original_text, tone, tone_description, keywords, firm_name, location, lawyer_name, city, state, planning_session_name="15-minute discovery call", discovery_call_link=""):
         response = self.text_client.chat.completions.create(
             model=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
             messages=[
@@ -77,6 +77,7 @@ class AzureServices:
                     2. Standard format: "Schedule your complimentary 15-minute Discovery Call with {firm_name} today"
                     3. Include a clear call-to-action like "Click here to schedule" or "Book your Discovery Call now"
                     4. Never offer to answer questions or provide consultation during this call
+                    5. Use the discovery call link: {discovery_call_link} when creating hyperlinks
 
                     STYLE GUIDE UPDATES:
                     1. LANGUAGE PREFERENCE:

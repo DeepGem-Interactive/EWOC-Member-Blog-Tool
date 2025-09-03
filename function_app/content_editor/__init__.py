@@ -27,6 +27,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             current_content
         )
 
+        # Log successful invocation for monitoring
+        logging.info(f"Content editor function completed successfully. Content length: {len(edited_content)}")
+        logging.info(f"Function invocation parameters - Session ID: {session_id}, User message: {user_message[:50]}...")
+
         return func.HttpResponse(
             json.dumps({"edited_content": edited_content}),
             mimetype="application/json",

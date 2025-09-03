@@ -21,7 +21,8 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         lawyer_name = req_body.get('lawyer_name')
         city = req_body.get('city')
         state = req_body.get('state')
-        planning_session_name = req_body.get('planning_session_name', 'Life & Legacy Planning Session')
+        planning_session_name = req_body.get('planning_session_name', '15-minute discovery call')
+        discovery_call_link = req_body.get('discovery_call_link', '')
 
         # Generate content
         generated_content = azure_services.rewrite_content(
@@ -34,8 +35,13 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             lawyer_name,
             city,
             state,
-            planning_session_name
+            planning_session_name,
+            discovery_call_link
         )
+
+        # Log successful invocation for monitoring
+        logging.info(f"Content generator function completed successfully. Content length: {len(generated_content)}")
+        logging.info(f"Function invocation parameters - Tone: {tone}, Firm: {firm_name}, Keywords: {keywords}")
 
         return func.HttpResponse(
             json.dumps({"content": generated_content}),
