@@ -278,6 +278,46 @@ def init_db():
         )
         ''')
         
+        # Create user_activity table if it doesn't exist
+        cursor.execute('''
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'user_activity')
+        CREATE TABLE user_activity (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            user_id INT NOT NULL,
+            activity_type NVARCHAR(100) NOT NULL,
+            feature_name NVARCHAR(100) NOT NULL,
+            api_endpoint NVARCHAR(255),
+            request_payload_size INT,
+            response_status INT,
+            response_size INT,
+            processing_time_ms INT,
+            success BIT DEFAULT 1,
+            error_message NVARCHAR(MAX),
+            additional_data NVARCHAR(MAX),
+            ip_address NVARCHAR(45),
+            user_agent NVARCHAR(500),
+            created_at DATETIME DEFAULT GETDATE(),
+            CONSTRAINT FK_user_activity_user FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+        ''')
+        
+        # Create index for better query performance
+        try:
+            cursor.execute('''
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_user_activity_user_date')
+            CREATE INDEX IX_user_activity_user_date ON user_activity(user_id, created_at)
+            ''')
+        except pyodbc.Error:
+            pass
+            
+        try:
+            cursor.execute('''
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_user_activity_type_date')
+            CREATE INDEX IX_user_activity_type_date ON user_activity(activity_type, created_at)
+            ''')
+        except pyodbc.Error:
+            pass
+        
         db.commit()
 
 # Initialize database
@@ -288,6 +328,104 @@ with app.app_context():
 @app.context_processor
 def inject_year():
     return {'now': datetime.now()}
+
+class UserActivityTracker:
+    @staticmethod
+    def log_activity(user_id, activity_type, feature_name, api_endpoint=None, 
+                    request_payload_size=None, response_status=None, response_size=None,
+                    processing_time_ms=None, success=True, error_message=None, 
+                    additional_data=None, ip_address=None, user_agent=None):
+        """Log user activity to the database"""
+        try:
+            db = get_db()
+            cursor = db.cursor()
+            
+            cursor.execute('''
+            INSERT INTO user_activity 
+            (user_id, activity_type, feature_name, api_endpoint, request_payload_size, 
+             response_status, response_size, processing_time_ms, success, error_message, 
+             additional_data, ip_address, user_agent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, activity_type, feature_name, api_endpoint, request_payload_size,
+                  response_status, response_size, processing_time_ms, success, error_message,
+                  additional_data, ip_address, user_agent))
+            
+            db.commit()
+            return True
+        except Exception as e:
+            print(f"Error logging user activity: {str(e)}")
+            return False
+    
+    @staticmethod
+    def get_user_activity_summary(user_id=None, days=30):
+        """Get activity summary for analytics"""
+        try:
+            db = get_db()
+            cursor = db.cursor()
+            
+            if user_id:
+                # Get activity for specific user
+                cursor.execute('''
+                SELECT 
+                    activity_type,
+                    feature_name,
+                    COUNT(*) as usage_count,
+                    AVG(processing_time_ms) as avg_processing_time,
+                    SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count,
+                    SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as error_count
+                FROM user_activity 
+                WHERE user_id = ? AND created_at >= DATEADD(day, -?, GETDATE())
+                GROUP BY activity_type, feature_name
+                ORDER BY usage_count DESC
+                ''', (user_id, days))
+            else:
+                # Get overall activity summary
+                cursor.execute('''
+                SELECT 
+                    u.username,
+                    ua.activity_type,
+                    ua.feature_name,
+                    COUNT(*) as usage_count,
+                    AVG(ua.processing_time_ms) as avg_processing_time,
+                    SUM(CASE WHEN ua.success = 1 THEN 1 ELSE 0 END) as success_count,
+                    SUM(CASE WHEN ua.success = 0 THEN 1 ELSE 0 END) as error_count
+                FROM user_activity ua
+                JOIN users u ON ua.user_id = u.id
+                WHERE ua.created_at >= DATEADD(day, -?, GETDATE())
+                GROUP BY u.username, ua.activity_type, ua.feature_name
+                ORDER BY usage_count DESC
+                ''', (days,))
+            
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"Error getting activity summary: {str(e)}")
+            return []
+    
+    @staticmethod
+    def get_feature_usage_stats(days=30):
+        """Get feature usage statistics"""
+        try:
+            db = get_db()
+            cursor = db.cursor()
+            
+            cursor.execute('''
+            SELECT 
+                feature_name,
+                COUNT(*) as total_usage,
+                COUNT(DISTINCT user_id) as unique_users,
+                AVG(processing_time_ms) as avg_processing_time,
+                SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count,
+                SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as error_count
+            FROM user_activity 
+            WHERE created_at >= DATEADD(day, -?, GETDATE())
+            GROUP BY feature_name
+            ORDER BY total_usage DESC
+            ''', (days,))
+            
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"Error getting feature usage stats: {str(e)}")
+            return []
 
 class UserSession:
     @staticmethod
@@ -334,8 +472,31 @@ class UserSession:
                 'discovery_call_link': user.discovery_call_link,
                 'custom_tones': [{'name': tone.name, 'description': tone.description} for tone in tones]
             }
+            
+            # Log successful login activity
+            UserActivityTracker.log_activity(
+                user_id=user.id,
+                activity_type="authentication",
+                feature_name="User Login",
+                api_endpoint="N/A",
+                success=True,
+                additional_data=f"Login from email: {email}"
+            )
+            
             return True
-        return False
+        else:
+            # Log failed login attempt if user exists
+            if user:
+                UserActivityTracker.log_activity(
+                    user_id=user.id,
+                    activity_type="authentication",
+                    feature_name="User Login",
+                    api_endpoint="N/A",
+                    success=False,
+                    error_message="Invalid password",
+                    additional_data=f"Failed login attempt from email: {email}"
+                )
+            return False
 
     @staticmethod
     def update_profile(username, firm, location, lawyer_name, state, address="", planning_session="", other_planning_session="", discovery_call_link="", selected_tone="", tone_description="", keywords=""):
@@ -1776,11 +1937,13 @@ def submit_feedback():
         if UserSession.submit_feedback(session['user']['id'], feedback_type, priority, subject, message, contact_email):
             return jsonify({'success': True, 'message': 'Feedback submitted successfully'})
         else:
-            return jsonify({'success': False, 'message': 'An error occurred while submitting feedback'})
-        
+                    return jsonify({'success': False, 'message': 'An error occurred while submitting feedback'})
+    
     except Exception as e:
         print(f"Error submitting feedback: {str(e)}")
         return jsonify({'success': False, 'message': 'An error occurred while submitting feedback'})
+
+
 
 @app.route('/select/<article>', methods=['GET', 'POST'])
 async def select_article(article):
@@ -1815,6 +1978,9 @@ async def select_article(article):
         planning_session_name = user.get('planning_session', '15-minute discovery call')
         discovery_call_link = user.get('discovery_call_link', '')
 
+        # Track activity start time
+        start_time = time.time()
+        
         # Call Azure Function for content generation
         function_url = f"{FUNCTION_APP_URL}/api/content_generator?code={FUNCTION_KEY}"
         
@@ -1847,6 +2013,20 @@ async def select_article(article):
             print("🔍 DEBUG: Using SIMULATE_OPENAI mode")
             await simulate_openai_call()
             blog_content = "Simulated blog content"
+            
+            # Log simulated activity
+            UserActivityTracker.log_activity(
+                user_id=user['id'],
+                activity_type="content_generation",
+                feature_name="AI Article Generation",
+                api_endpoint="SIMULATED",
+                request_payload_size=len(str(payload)),
+                response_status=200,
+                response_size=len(blog_content),
+                processing_time_ms=int((time.time() - start_time) * 1000),
+                success=True,
+                additional_data=f"Article: {article}, Tone: {tone}, Keywords: {keywords}"
+            )
         else:
             print("🔍 DEBUG: Making actual HTTP request to Azure Function")
             try:
@@ -1865,6 +2045,22 @@ async def select_article(article):
                         
                         if response.status != 200:
                             print(f"🔍 DEBUG: Error response: {response_text}")
+                            
+                            # Log failed activity
+                            UserActivityTracker.log_activity(
+                                user_id=user['id'],
+                                activity_type="content_generation",
+                                feature_name="AI Article Generation",
+                                api_endpoint=function_url,
+                                request_payload_size=len(str(payload)),
+                                response_status=response.status,
+                                response_size=len(response_text),
+                                processing_time_ms=int((time.time() - start_time) * 1000),
+                                success=False,
+                                error_message=response_text,
+                                additional_data=f"Article: {article}, Tone: {tone}, Keywords: {keywords}"
+                            )
+                            
                             raise Exception(f"Function error: {response_text}")
                         
                         result = await response.json()
@@ -1872,9 +2068,39 @@ async def select_article(article):
                         blog_content = result["content"]
                         print(f"🔍 DEBUG: Generated content length: {len(blog_content)}")
                         
+                        # Log successful activity
+                        UserActivityTracker.log_activity(
+                            user_id=user['id'],
+                            activity_type="content_generation",
+                            feature_name="AI Article Generation",
+                            api_endpoint=function_url,
+                            request_payload_size=len(str(payload)),
+                            response_status=response.status,
+                            response_size=len(blog_content),
+                            processing_time_ms=int((time.time() - start_time) * 1000),
+                            success=True,
+                            additional_data=f"Article: {article}, Tone: {tone}, Keywords: {keywords}"
+                        )
+                        
             except Exception as e:
                 print(f"🔍 DEBUG: Exception occurred: {str(e)}")
                 print(f"🔍 DEBUG: Exception type: {type(e).__name__}")
+                
+                # Log exception activity
+                UserActivityTracker.log_activity(
+                    user_id=user['id'],
+                    activity_type="content_generation",
+                    feature_name="AI Article Generation",
+                    api_endpoint=function_url,
+                    request_payload_size=len(str(payload)),
+                    response_status=0,
+                    response_size=0,
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    success=False,
+                    error_message=str(e),
+                    additional_data=f"Article: {article}, Tone: {tone}, Keywords: {keywords}"
+                )
+                
                 raise
         
         # Save the generated content to a file
@@ -2011,6 +2237,9 @@ async def review():
                 post['content']
             )
             
+            # Track activity start time
+            start_time = time.time()
+            
             # Call Azure Function for content editing
             function_url = f"{FUNCTION_APP_URL}/api/content_editor?code={FUNCTION_KEY}"
             payload = {
@@ -2028,6 +2257,20 @@ async def review():
                 print("🔍 DEBUG: Content Editor - Using SIMULATE_OPENAI mode")
                 await simulate_openai_call()
                 edited_content = current_content  # Return current content for simulation
+                
+                # Log simulated activity
+                UserActivityTracker.log_activity(
+                    user_id=session['user']['id'],
+                    activity_type="content_editing",
+                    feature_name="AI Content Editing",
+                    api_endpoint="SIMULATED",
+                    request_payload_size=len(str(payload)),
+                    response_status=200,
+                    response_size=len(edited_content),
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    success=True,
+                    additional_data=f"User message: {user_message[:100]}..."
+                )
             else:
                 print("🔍 DEBUG: Content Editor - Making actual HTTP request to Azure Function")
                 try:
@@ -2044,6 +2287,22 @@ async def review():
                             
                             if response.status != 200:
                                 print(f"🔍 DEBUG: Content Editor - Error response: {response_text}")
+                                
+                                # Log failed activity
+                                UserActivityTracker.log_activity(
+                                    user_id=session['user']['id'],
+                                    activity_type="content_editing",
+                                    feature_name="AI Content Editing",
+                                    api_endpoint=function_url,
+                                    request_payload_size=len(str(payload)),
+                                    response_status=response.status,
+                                    response_size=len(response_text),
+                                    processing_time_ms=int((time.time() - start_time) * 1000),
+                                    success=False,
+                                    error_message=response_text,
+                                    additional_data=f"User message: {user_message[:100]}..."
+                                )
+                                
                                 raise Exception(f"Function error: {response_text}")
                             
                             result = await response.json()
@@ -2051,9 +2310,39 @@ async def review():
                             edited_content = result["edited_content"]
                             print(f"🔍 DEBUG: Content Editor - Edited content length: {len(edited_content)}")
                             
+                            # Log successful activity
+                            UserActivityTracker.log_activity(
+                                user_id=session['user']['id'],
+                                activity_type="content_editing",
+                                feature_name="AI Content Editing",
+                                api_endpoint=function_url,
+                                request_payload_size=len(str(payload)),
+                                response_status=response.status,
+                                response_size=len(edited_content),
+                                processing_time_ms=int((time.time() - start_time) * 1000),
+                                success=True,
+                                additional_data=f"User message: {user_message[:100]}..."
+                            )
+                            
                 except Exception as e:
                     print(f"🔍 DEBUG: Content Editor - Exception occurred: {str(e)}")
                     print(f"🔍 DEBUG: Content Editor - Exception type: {type(e).__name__}")
+                    
+                    # Log exception activity
+                    UserActivityTracker.log_activity(
+                        user_id=session['user']['id'],
+                        activity_type="content_editing",
+                        feature_name="AI Content Editing",
+                        api_endpoint=function_url,
+                        request_payload_size=len(str(payload)),
+                        response_status=0,
+                        response_size=0,
+                        processing_time_ms=int((time.time() - start_time) * 1000),
+                        success=False,
+                        error_message=str(e),
+                        additional_data=f"User message: {user_message[:100]}..."
+                    )
+                    
                     raise
             
             session['chat_history'].append({
@@ -2177,6 +2466,9 @@ async def generate_image():
     if 'current_post' not in session:
         return redirect(url_for('dashboard'))
 
+    # Track activity start time
+    start_time = time.time()
+    
     # Call Azure Function for image generation
     function_url = f"{FUNCTION_APP_URL}/api/image_generator?code={FUNCTION_KEY}"
     payload = {
@@ -2192,6 +2484,21 @@ async def generate_image():
         await simulate_openai_call()
         session['current_post']['image'] = "dummy.png"
         session.modified = True
+        
+        # Log simulated activity
+        UserActivityTracker.log_activity(
+            user_id=session['user']['id'],
+            activity_type="image_generation",
+            feature_name="AI Image Generation",
+            api_endpoint="SIMULATED",
+            request_payload_size=len(str(payload)),
+            response_status=200,
+            response_size=0,
+            processing_time_ms=int((time.time() - start_time) * 1000),
+            success=True,
+            additional_data="Generated dummy image"
+        )
+        
         return redirect(url_for('review'))
     
     print("🔍 DEBUG: Image Generator - Making actual HTTP request to Azure Function")
@@ -2209,14 +2516,60 @@ async def generate_image():
                 
                 if response.status != 200:
                     print(f"🔍 DEBUG: Image Generator - Error response: {response_text}")
+                    
+                    # Log failed activity
+                    UserActivityTracker.log_activity(
+                        user_id=session['user']['id'],
+                        activity_type="image_generation",
+                        feature_name="AI Image Generation",
+                        api_endpoint=function_url,
+                        request_payload_size=len(str(payload)),
+                        response_status=response.status,
+                        response_size=len(response_text),
+                        processing_time_ms=int((time.time() - start_time) * 1000),
+                        success=False,
+                        error_message=response_text,
+                        additional_data="Image generation failed"
+                    )
+                    
                     raise Exception(f"Function error: {response_text}")
                 
                 result = await response.json()
                 print(f"🔍 DEBUG: Image Generator - Parsed JSON result keys: {list(result.keys())}")
                 
+                # Log successful activity
+                UserActivityTracker.log_activity(
+                    user_id=session['user']['id'],
+                    activity_type="image_generation",
+                    feature_name="AI Image Generation",
+                    api_endpoint=function_url,
+                    request_payload_size=len(str(payload)),
+                    response_status=response.status,
+                    response_size=len(response_text),
+                    processing_time_ms=int((time.time() - start_time) * 1000),
+                    success=True,
+                    additional_data=f"Generated image: {result.get('image_filename', 'unknown')}"
+                )
+                
     except Exception as e:
         print(f"🔍 DEBUG: Image Generator - Exception occurred: {str(e)}")
         print(f"🔍 DEBUG: Image Generator - Exception type: {type(e).__name__}")
+        
+        # Log exception activity
+        UserActivityTracker.log_activity(
+            user_id=session['user']['id'],
+            activity_type="image_generation",
+            feature_name="AI Image Generation",
+            api_endpoint=function_url,
+            request_payload_size=len(str(payload)),
+            response_status=0,
+            response_size=0,
+            processing_time_ms=int((time.time() - start_time) * 1000),
+            success=False,
+            error_message=str(e),
+            additional_data="Image generation exception"
+        )
+        
         raise
     
     image_filename = result["image_filename"]
