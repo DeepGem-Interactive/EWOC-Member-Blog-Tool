@@ -182,6 +182,14 @@ def init_db():
             ''')
         except pyodbc.Error:
             pass
+            
+        try:
+            cursor.execute('''
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'is_blocked')
+            ALTER TABLE users ADD is_blocked BIT DEFAULT 0
+            ''')
+        except pyodbc.Error:
+            pass
         
         # Update password column size to accommodate hashed passwords
         try:
@@ -454,6 +462,20 @@ class UserSession:
         user = cursor.fetchone()
         
         if user and user.password == password:
+            # Check if user is blocked
+            if hasattr(user, 'is_blocked') and user.is_blocked:
+                # Log blocked user login attempt
+                UserActivityTracker.log_activity(
+                    user_id=user.id,
+                    activity_type="authentication",
+                    feature_name="User Login",
+                    api_endpoint="N/A",
+                    success=False,
+                    error_message="User account is blocked",
+                    additional_data=f"Blocked user login attempt from email: {email}"
+                )
+                return False
+            
             # Get user's custom tones
             cursor.execute('SELECT name, description FROM tones WHERE user_id = ?', (user.id,))
             tones = cursor.fetchall()
@@ -536,6 +558,43 @@ class UserSession:
     @staticmethod
     def get_current_user():
         return session.get('user')
+    
+    @staticmethod
+    def block_user(user_id, blocked=True):
+        """Block or unblock a user account"""
+        try:
+            db = get_db()
+            cursor = db.cursor()
+            cursor.execute('UPDATE users SET is_blocked = ? WHERE id = ?', (1 if blocked else 0, user_id))
+            db.commit()
+            
+            # Log the blocking action
+            UserActivityTracker.log_activity(
+                user_id=user_id,
+                activity_type="account_management",
+                feature_name="User Blocking",
+                api_endpoint="N/A",
+                success=True,
+                additional_data=f"User {'blocked' if blocked else 'unblocked'}"
+            )
+            
+            return True
+        except Exception as e:
+            print(f"Error blocking/unblocking user: {str(e)}")
+            return False
+    
+    @staticmethod
+    def is_user_blocked(user_id):
+        """Check if a user is blocked"""
+        try:
+            db = get_db()
+            cursor = db.cursor()
+            cursor.execute('SELECT is_blocked FROM users WHERE id = ?', (user_id,))
+            result = cursor.fetchone()
+            return result and result.is_blocked
+        except Exception as e:
+            print(f"Error checking user block status: {str(e)}")
+            return False
 
     @staticmethod
     def add_custom_tone(user_id, tone_name, tone_description):
@@ -1696,6 +1755,11 @@ def profile():
     if not user:
         return redirect(url_for('login'))
     
+    # Check if user is blocked
+    if UserSession.is_user_blocked(user['id']):
+        session.clear()
+        return redirect(url_for('login'))
+    
     if request.method == 'POST':
         # Handle both form data and JSON requests
         if request.is_json:
@@ -1854,6 +1918,11 @@ def logout():
 def dashboard():
     user = UserSession.get_current_user()
     if not user:
+        return redirect(url_for('login'))
+    
+    # Check if user is blocked
+    if UserSession.is_user_blocked(user['id']):
+        session.clear()
         return redirect(url_for('login'))
     
     # Get articles and their metadata
