@@ -158,7 +158,7 @@ def init_db():
             ''')
         except pyodbc.Error:
             pass
-            
+        
         try:
             cursor.execute('''
             IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'selected_tone')
@@ -1818,6 +1818,12 @@ async def select_article(article):
         # Call Azure Function for content generation
         function_url = f"{FUNCTION_APP_URL}/api/content_generator?code={FUNCTION_KEY}"
         
+        # Add console logging to debug the issue
+        print(f"🔍 DEBUG: FUNCTION_APP_URL = {FUNCTION_APP_URL}")
+        print(f"🔍 DEBUG: FUNCTION_KEY = {FUNCTION_KEY[:10]}..." if FUNCTION_KEY else "🔍 DEBUG: FUNCTION_KEY = None")
+        print(f"🔍 DEBUG: SIMULATE_OPENAI = {SIMULATE_OPENAI}")
+        print(f"🔍 DEBUG: Function URL = {function_url}")
+        
         payload = {
             "original_text": FileManager.read_docx(article),
             "tone": tone,
@@ -1832,18 +1838,44 @@ async def select_article(article):
             "discovery_call_link": discovery_call_link
         }
         
+        print(f"🔍 DEBUG: Payload prepared with {len(payload)} items")
+        print(f"🔍 DEBUG: Firm name = {firm}")
+        print(f"🔍 DEBUG: Tone = {tone}")
+        print(f"🔍 DEBUG: Keywords = {keywords}")
+        
         if SIMULATE_OPENAI:
+            print("🔍 DEBUG: Using SIMULATE_OPENAI mode")
             await simulate_openai_call()
             blog_content = "Simulated blog content"
         else:
-            import aiohttp
-            async with aiohttp.ClientSession() as client_session:
-                async with client_session.post(function_url, json=payload) as response:
-                    if response.status != 200:
-                        raise Exception(f"Function error: {await response.text()}")
+            print("🔍 DEBUG: Making actual HTTP request to Azure Function")
+            try:
+                import aiohttp
+                async with aiohttp.ClientSession() as client_session:
+                    print(f"🔍 DEBUG: Sending POST request to: {function_url}")
+                    print(f"🔍 DEBUG: Request payload size: {len(str(payload))} characters")
                     
-                    result = await response.json()
-                    blog_content = result["content"]
+                    async with client_session.post(function_url, json=payload) as response:
+                        print(f"🔍 DEBUG: Response status: {response.status}")
+                        print(f"🔍 DEBUG: Response headers: {dict(response.headers)}")
+                        
+                        response_text = await response.text()
+                        print(f"🔍 DEBUG: Response text length: {len(response_text)}")
+                        print(f"🔍 DEBUG: Response text preview: {response_text[:500]}...")
+                        
+                        if response.status != 200:
+                            print(f"🔍 DEBUG: Error response: {response_text}")
+                            raise Exception(f"Function error: {response_text}")
+                        
+                        result = await response.json()
+                        print(f"🔍 DEBUG: Parsed JSON result keys: {list(result.keys())}")
+                        blog_content = result["content"]
+                        print(f"🔍 DEBUG: Generated content length: {len(blog_content)}")
+                        
+            except Exception as e:
+                print(f"🔍 DEBUG: Exception occurred: {str(e)}")
+                print(f"🔍 DEBUG: Exception type: {type(e).__name__}")
+                raise
         
         # Save the generated content to a file
         filename = FileManager.save_content(blog_content)
@@ -1987,18 +2019,42 @@ async def review():
                 "current_content": current_content
             }
             
+            print(f"🔍 DEBUG: Content Editor - Function URL = {function_url}")
+            print(f"🔍 DEBUG: Content Editor - Payload keys = {list(payload.keys())}")
+            print(f"🔍 DEBUG: Content Editor - User message = {user_message[:50]}...")
+            print(f"🔍 DEBUG: Content Editor - Current content length = {len(current_content)}")
+            
             if SIMULATE_OPENAI:
+                print("🔍 DEBUG: Content Editor - Using SIMULATE_OPENAI mode")
                 await simulate_openai_call()
                 edited_content = current_content  # Return current content for simulation
             else:
-                import aiohttp
-                async with aiohttp.ClientSession() as client_session:
-                    async with client_session.post(function_url, json=payload) as response:
-                        if response.status != 200:
-                            raise Exception(f"Function error: {await response.text()}")
+                print("🔍 DEBUG: Content Editor - Making actual HTTP request to Azure Function")
+                try:
+                    import aiohttp
+                    async with aiohttp.ClientSession() as client_session:
+                        print(f"🔍 DEBUG: Content Editor - Sending POST request to: {function_url}")
                         
-                        result = await response.json()
-                        edited_content = result["edited_content"]
+                        async with client_session.post(function_url, json=payload) as response:
+                            print(f"🔍 DEBUG: Content Editor - Response status: {response.status}")
+                            
+                            response_text = await response.text()
+                            print(f"🔍 DEBUG: Content Editor - Response text length: {len(response_text)}")
+                            print(f"🔍 DEBUG: Content Editor - Response text preview: {response_text[:500]}...")
+                            
+                            if response.status != 200:
+                                print(f"🔍 DEBUG: Content Editor - Error response: {response_text}")
+                                raise Exception(f"Function error: {response_text}")
+                            
+                            result = await response.json()
+                            print(f"🔍 DEBUG: Content Editor - Parsed JSON result keys: {list(result.keys())}")
+                            edited_content = result["edited_content"]
+                            print(f"🔍 DEBUG: Content Editor - Edited content length: {len(edited_content)}")
+                            
+                except Exception as e:
+                    print(f"🔍 DEBUG: Content Editor - Exception occurred: {str(e)}")
+                    print(f"🔍 DEBUG: Content Editor - Exception type: {type(e).__name__}")
+                    raise
             
             session['chat_history'].append({
                 'role': 'user',
@@ -2126,18 +2182,42 @@ async def generate_image():
     payload = {
         "text_prompt": session['current_post']['content']
     }
+    
+    print(f"🔍 DEBUG: Image Generator - Function URL = {function_url}")
+    print(f"🔍 DEBUG: Image Generator - Payload keys = {list(payload.keys())}")
+    print(f"🔍 DEBUG: Image Generator - Text prompt length = {len(payload['text_prompt'])}")
+    
     if SIMULATE_OPENAI:
+        print("🔍 DEBUG: Image Generator - Using SIMULATE_OPENAI mode")
         await simulate_openai_call()
         session['current_post']['image'] = "dummy.png"
         session.modified = True
         return redirect(url_for('review'))
     
-    import aiohttp, base64, os
-    async with aiohttp.ClientSession() as client_session:
-        async with client_session.post(function_url, json=payload) as response:
-            if response.status != 200:
-                raise Exception(f"Function error: {await response.text()}")
-            result = await response.json()
+    print("🔍 DEBUG: Image Generator - Making actual HTTP request to Azure Function")
+    try:
+        import aiohttp, base64, os
+        async with aiohttp.ClientSession() as client_session:
+            print(f"🔍 DEBUG: Image Generator - Sending POST request to: {function_url}")
+            
+            async with client_session.post(function_url, json=payload) as response:
+                print(f"🔍 DEBUG: Image Generator - Response status: {response.status}")
+                
+                response_text = await response.text()
+                print(f"🔍 DEBUG: Image Generator - Response text length: {len(response_text)}")
+                print(f"🔍 DEBUG: Image Generator - Response text preview: {response_text[:500]}...")
+                
+                if response.status != 200:
+                    print(f"🔍 DEBUG: Image Generator - Error response: {response_text}")
+                    raise Exception(f"Function error: {response_text}")
+                
+                result = await response.json()
+                print(f"🔍 DEBUG: Image Generator - Parsed JSON result keys: {list(result.keys())}")
+                
+    except Exception as e:
+        print(f"🔍 DEBUG: Image Generator - Exception occurred: {str(e)}")
+        print(f"🔍 DEBUG: Image Generator - Exception type: {type(e).__name__}")
+        raise
     
     image_filename = result["image_filename"]
     os.makedirs(os.path.join(app.static_folder, 'generated'), exist_ok=True)
